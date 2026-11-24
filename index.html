@@ -1989,6 +1989,9 @@ async function fetchLiveMarketPrices() {
       setTradeSide(appState.ui.tradeSide || 'buy');
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
       if (appState.authenticated) enterDashboard();
+const initialCoin = appState.ui.marketCoin || 'BTC';
+fetchLiveMarketPrices();
+fetchLiveCoinChart(initialCoin);
 
       const testBtn = document.getElementById("test-backend-btn");
       const statusText = document.getElementById("backend-status-text");
