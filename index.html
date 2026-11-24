@@ -739,47 +739,47 @@
                 <input id="set-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="1234" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white outline-none" />
               </div>
               <div class="sm:col-span-2">
-            <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
-              Save Security Settings
-            </button>
-          </div>
-        </form>
+                <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
+                  Save Security Settings
+                </button>
+              </div>
+            </form>
 
-        <!-- Dedicated 4-Digit Transaction Passcode Setup & Change Card -->
-        <div class="pt-4 border-t border-slate-200 dark:border-nikofy-darkBorder space-y-3">
-          <div class="flex items-center justify-between">
-            <div>
-              <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">4-Digit Transaction Passcode</h3>
-              <p class="text-xs text-slate-500 dark:text-slate-400">Required to authorize every buy/sell, external crypto transfer, P2P, withdrawal &amp; bill payment.</p>
+            <!-- Dedicated 4-Digit Transaction Passcode Setup & Change Card -->
+            <div class="pt-4 border-t border-slate-200 dark:border-nikofy-darkBorder space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">4-Digit Transaction Passcode</h3>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">Required to authorize every buy/sell, external crypto transfer, P2P, withdrawal &amp; bill payment.</p>
+                </div>
+                <span id="passcode-status-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full">Not Set</span>
+              </div>
+              <form onsubmit="handleSettingsPasscodeUpdate(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div id="settings-current-passcode-wrap" class="hidden">
+                  <label for="set-current-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Current 4-Digit Passcode</label>
+                  <input id="set-current-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="••••"
+                    class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
+                </div>
+                <div>
+                  <label for="set-new-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">New 4-Digit Passcode</label>
+                  <input id="set-new-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
+                    class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
+                </div>
+                <div>
+                  <label for="set-confirm-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
+                  <input id="set-confirm-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
+                    class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
+                </div>
+                <div class="sm:col-span-3">
+                  <button type="submit" class="w-full py-2.5 rounded-xl bg-nikofy-blueAccent hover:bg-blue-800 text-white font-extrabold text-xs transition">
+                    Save 4-Digit Transaction Passcode
+                  </button>
+                </div>
+              </form>
             </div>
-            <span id="passcode-status-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full">Not Set</span>
           </div>
-          <form onsubmit="handleSettingsPasscodeUpdate(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-            <div id="settings-current-passcode-wrap" class="hidden">
-              <label for="set-current-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Current 4-Digit Passcode</label>
-              <input id="set-current-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="••••"
-                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
-            </div>
-            <div>
-              <label for="set-new-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">New 4-Digit Passcode</label>
-              <input id="set-new-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
-                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
-            </div>
-            <div>
-              <label for="set-confirm-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
-              <input id="set-confirm-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
-                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
-            </div>
-            <div class="sm:col-span-3">
-              <button type="submit" class="w-full py-2.5 rounded-xl bg-nikofy-blueAccent hover:bg-blue-800 text-white font-extrabold text-xs transition">
-                Save 4-Digit Transaction Passcode
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
 
-      <!-- Google Authenticator 2FA Setup -->
+          <!-- Google Authenticator 2FA Setup -->
           <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
             <div class="flex items-center justify-between">
               <div>
@@ -829,7 +829,7 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODALS: ITEMIZED INVOICE & KYC TIER / LIVENESS SCAN                   -->
+  <!-- MODALS: ITEMIZED INVOICE, PASSCODE & KYC TIER / LIVENESS SCAN        -->
   <!-- ===================================================================== -->
 
   <!-- Itemized Nikofy.ng Invoice Modal -->
@@ -846,66 +846,63 @@
       </button>
     </div>
   </div>
-</div>
 
-<!-- Mandatory 4-Digit Transaction Passcode Setup Modal -->
-<div id="modal-setup-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
-    <div class="flex items-center justify-between">
-      <span class="text-xs font-extrabold uppercase tracking-wider text-nikofy-green dark:text-emerald-400">Security Required</span>
-      <button type="button" onclick="cancelPendingPasscodeFlow()" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
-    </div>
-    <div>
-      <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Set Your 4-Digit Transaction Passcode</h3>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Create a unique 4-digit passcode for your Nikofy.ng account. You will enter it to authorize every transaction.</p>
-    </div>
-    <form onsubmit="submitSetupPasscodeModal(event)" class="space-y-3">
-      <div>
-        <label for="setup-modal-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Enter 4-Digit Passcode</label>
-        <input id="setup-modal-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
-          class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
+  <!-- Mandatory 4-Digit Transaction Passcode Setup Modal -->
+  <div id="modal-setup-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-extrabold uppercase tracking-wider text-nikofy-green dark:text-emerald-400">Security Required</span>
+        <button type="button" onclick="cancelPendingPasscodeFlow()" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
       </div>
       <div>
-        <label for="setup-modal-passcode-confirm" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
-        <input id="setup-modal-passcode-confirm" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
-          class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
+        <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Set Your 4-Digit Transaction Passcode</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Create a unique 4-digit passcode for your Nikofy.ng account. You will enter it to authorize every transaction.</p>
       </div>
-      <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
-        Save Passcode &amp; Continue Transaction
-      </button>
-    </form>
+      <form onsubmit="submitSetupPasscodeModal(event)" class="space-y-3">
+        <div>
+          <label for="setup-modal-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Enter 4-Digit Passcode</label>
+          <input id="setup-modal-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
+            class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
+        </div>
+        <div>
+          <label for="setup-modal-passcode-confirm" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
+          <input id="setup-modal-passcode-confirm" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
+            class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
+        </div>
+        <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
+          Save Passcode &amp; Continue Transaction
+        </button>
+      </form>
+    </div>
   </div>
-</div>
 
-<!-- Per-Transaction 4-Digit Passcode Verification Modal -->
-<div id="modal-verify-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
-    <div class="flex items-center justify-between">
-      <span class="text-xs font-extrabold uppercase tracking-wider text-nikofy-blueAccent dark:text-sky-400">Authorize Transaction</span>
-      <button type="button" onclick="cancelPendingPasscodeFlow()" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
-    </div>
-    <div>
-      <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Enter 4-Digit Passcode</h3>
-      <p id="verify-passcode-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Confirm your Nikofy.ng transaction passcode to proceed.</p>
-    </div>
-    <form onsubmit="submitVerifyPasscodeModal(event)" class="space-y-4">
+  <!-- Per-Transaction 4-Digit Passcode Verification Modal -->
+  <div id="modal-verify-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-extrabold uppercase tracking-wider text-nikofy-blueAccent dark:text-sky-400">Authorize Transaction</span>
+        <button type="button" onclick="cancelPendingPasscodeFlow()" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
+      </div>
       <div>
-        <label for="verify-modal-passcode-input" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">4-Digit Transaction Passcode</label>
-        <input id="verify-modal-passcode-input" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="••••"
-          class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.55em] text-slate-900 dark:text-white tabular-nums outline-none" />
+        <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Enter 4-Digit Passcode</h3>
+        <p id="verify-passcode-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Confirm your Nikofy.ng transaction passcode to proceed.</p>
       </div>
-      <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-        <span>Protected by Nikofy.ng Passcode</span>
-        <button type="button" onclick="openPasscodeSetupFromVerify()" class="font-bold text-nikofy-green dark:text-emerald-400 hover:underline">Reset Passcode</button>
-      </div>
-      <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
-        Verify &amp; Execute Transaction
-      </button>
-    </form>
+      <form onsubmit="submitVerifyPasscodeModal(event)" class="space-y-4">
+        <div>
+          <label for="verify-modal-passcode-input" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">4-Digit Transaction Passcode</label>
+          <input id="verify-modal-passcode-input" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="••••"
+            class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.55em] text-slate-900 dark:text-white tabular-nums outline-none" />
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+          <span>Protected by Nikofy.ng Passcode</span>
+          <button type="button" onclick="openPasscodeSetupFromVerify()" class="font-bold text-nikofy-green dark:text-emerald-400 hover:underline">Reset Passcode</button>
+        </div>
+        <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
+          Verify &amp; Execute Transaction
+        </button>
+      </form>
+    </div>
   </div>
-</div>
-
-<!-- Itemized Nikofy.ng Invoice Modal -->
 
   <!-- KYC Tier & Liveness Scan Modal -->
   <div id="modal-kyc" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
@@ -950,6 +947,12 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Backend Connection Test Bar -->
+  <div id="nikofy-api-status" style="padding:10px;font-family:sans-serif;text-align:center;">
+    <button id="test-backend-btn" type="button" style="padding:6px 12px;border-radius:8px;background:#064E3B;color:#fff;font-weight:700;font-size:12px;">Test Backend Connection</button>
+    <span id="backend-status-text" style="margin-left:8px;font-size:12px;">Not checked yet</span>
   </div>
 
   <!-- ===================================================================== -->
@@ -1872,6 +1875,43 @@
 
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
+    const API_BASE_URL = "https://nikofy-backend.onrender.com";
+
+    async function checkNikofyHealth() {
+      const res = await fetch(`${API_BASE_URL}/health`);
+      return res.json();
+    }
+
+    async function verifyNikofyPasscode(userId, passcode) {
+      const res = await fetch(`${API_BASE_URL}/api/security/passcode/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, passcode })
+      });
+      return res.json();
+    }
+
+    async function evaluateNikofyTransfer({
+      userId,
+      channel,
+      amountMinor,
+      gasFeeMinor = 0,
+      projectedBalanceAfterMinor = null
+    }) {
+      const res = await fetch(`${API_BASE_URL}/api/transactions/evaluate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          channel,
+          amountMinor,
+          gasFeeMinor,
+          projectedBalanceAfterMinor
+        })
+      });
+      return res.json();
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       applyTheme();
       refreshCaptcha('signin');
@@ -1880,68 +1920,22 @@
       setTradeSide(appState.ui.tradeSide || 'buy');
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
       if (appState.authenticated) enterDashboard();
-    });
-  const API_BASE_URL = "https://nikofy-backend.onrender.com";
 
-async function checkNikofyHealth() {
-  const res = await fetch(`${API_BASE_URL}/health`);
-  return res.json();
-}
+      const testBtn = document.getElementById("test-backend-btn");
+      const statusText = document.getElementById("backend-status-text");
 
-async function verifyNikofyPasscode(userId, passcode) {
-  const res = await fetch(`${API_BASE_URL}/api/security/passcode/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, passcode })
-  });
-  return res.json();
-}
-
-async function evaluateNikofyTransfer({
-  userId,
-  channel,
-  amountMinor,
-  gasFeeMinor = 0,
-  projectedBalanceAfterMinor = null
-}) {
-  const res = await fetch(`${API_BASE_URL}/api/transactions/evaluate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userId,
-      channel,
-      amountMinor,
-      gasFeeMinor,
-      projectedBalanceAfterMinor
-    })
-  });
-  return res.json();
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-
-  const testBtn = document.getElementById("test-backend-btn");
-  const statusText = document.getElementById("backend-status-text");
-
-  if (testBtn && statusText) {
-    testBtn.addEventListener("click", async () => {
-      statusText.textContent = "Checking...";
-      try {
-        const data = await checkNikofyHealth();
-        statusText.textContent = data.ok ? "Backend Online" : "Backend Error";
-      } catch (err) {
-        statusText.textContent = "Connection Failed";
+      if (testBtn && statusText) {
+        testBtn.addEventListener("click", async () => {
+          statusText.textContent = "Checking...";
+          try {
+            const data = await checkNikofyHealth();
+            statusText.textContent = data.ok ? "Backend Online" : "Backend Error";
+          } catch (err) {
+            statusText.textContent = "Connection Failed";
+          }
+        });
       }
     });
-  }
-});
-    
-  
->
-<div id="nikofy-api-status" style="padding:10px;font-family:sans-serif;">
-  <button id="test-backend-btn" type="button">Test Backend Connection</button>
-  <span id="backend-status-text">Not checked yet</span>
-</div>
-
-  </body>
+  </script>
+</body>
 </html>
