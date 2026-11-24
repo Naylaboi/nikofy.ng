@@ -1881,6 +1881,42 @@
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
       if (appState.authenticated) enterDashboard();
     });
-  </script>
+  </const API_BASE_URL = "https://<your-service-name>-backend.onrender.com";
+
+async function checkNikofyHealth() {
+  const res = await fetch(`${API_BASE_URL}/health`);
+  return res.json();
+}
+
+async function verifyNikofyPasscode(userId, passcode) {
+  const res = await fetch(`${API_BASE_URL}/api/security/passcode/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, passcode })
+  });
+  return res.json();
+}
+
+async function evaluateNikofyTransfer({
+  userId,
+  channel,
+  amountMinor,
+  gasFeeMinor = 0,
+  projectedBalanceAfterMinor = null
+}) {
+  const res = await fetch(`${API_BASE_URL}/api/transactions/evaluate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId,
+      channel,
+      amountMinor,
+      gasFeeMinor,
+      projectedBalanceAfterMinor
+    })
+  });
+  return res.json();
+}
+>
 </body>
 </html>
