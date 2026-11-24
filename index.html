@@ -1913,7 +1913,7 @@ async function fetchLiveMarketPrices() {
   } catch (err) {
     console.warn('Using fallback crypto prices:', err.message || err);
   }
-} async function fetchLiveCoinChart(coin) {
+ async function fetchLiveCoinChart(coin) {
   const cgId = COINGECKO_IDS[coin];
   if (!cgId || isLoadingMarketChart) return;
   isLoadingMarketChart = true;
