@@ -1917,20 +1917,24 @@ async function evaluateNikofyTransfer({
   });
   return res.json();
 }
-const testBtn = document.getElementById("test-backend-btn");
-const statusText = document.getElementById("backend-status-text");
 
-if (testBtn && statusText) {
-  testBtn.addEventListener("click", async () => {
-    statusText.textContent = "Checking...";
-    try {
-      const data = await checkNikofyHealth();
-      statusText.textContent = data.ok ? "Backend Online" : "Backend Error";
-    } catch (err) {
-      statusText.textContent = "Connection Failed";
-    }
-  });
-}
+document.addEventListener("DOMContentLoaded", () => {
+  const testBtn = document.getElementById("test-backend-btn");
+  const statusText = document.getElementById("backend-status-text");
+
+  if (testBtn && statusText) {
+    testBtn.addEventListener("click", async () => {
+      statusText.textContent = "Checking...";
+      try {
+        const data = await checkNikofyHealth();
+        statusText.textContent = data.ok ? "Backend Online" : "Backend Error";
+      } catch (err) {
+        statusText.textContent = "Connection Failed";
+      }
+    });
+  }
+});
+    
   
 >
 <div id="nikofy-api-status" style="padding:10px;font-family:sans-serif;">
