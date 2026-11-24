@@ -1479,50 +1479,55 @@
     // =====================================================================
     // LIVE CRYPTO MARKET CHART (BTC, USDT, ETH, BNB, SOL)
     // =====================================================================
-    function selectMarketCoin(coin) {
-      appState.ui.marketCoin = coin;
-      saveState();
-      const data = MARKET_COINS[coin] || MARKET_COINS.BTC;
+    function selectMarketCoin(coin, { skipChartFetch = false } = {}) {
+  appState.ui.marketCoin = coin;
+  saveState();
+  const data = MARKET_COINS[coin] || MARKET_COINS.BTC;
 
-      document.querySelectorAll('.market-coin-btn').forEach((btn) => {
-        btn.className = btn.dataset.coin === coin
-          ? 'market-coin-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-nikofy-green text-white'
-          : 'market-coin-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-white dark:bg-nikofy-blue text-slate-700 dark:text-slate-300';
-      });
+  document.querySelectorAll('.market-coin-btn').forEach((btn) => {
+    btn.className = btn.dataset.coin === coin
+      ? 'market-coin-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-nikofy-green text-white'
+      : 'market-coin-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-white dark:bg-nikofy-blue text-slate-700 dark:text-slate-300';
+  });
 
-      document.getElementById('chart-coin-name').textContent = data.name;
-      document.getElementById('chart-coin-price').textContent = formatNgn(data.price);
-      const chEl = document.getElementById('chart-coin-change');
-      chEl.textContent = `${data.change} (24h)`;
-      chEl.className = data.positive
-        ? 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 tabular-nums'
-        : 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 tabular-nums';
+  document.getElementById('chart-coin-name').textContent = data.name;
+  document.getElementById('chart-coin-price').textContent = formatNgn(data.price);
+  const chEl = document.getElementById('chart-coin-change');
+  chEl.textContent = `${data.change} (24h)`;
+  chEl.className = data.positive
+    ? 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 tabular-nums'
+    : 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 tabular-nums';
 
-      const pts = data.points;
-      const min = Math.min(...pts);
-      const max = Math.max(...pts);
-      const range = max - min || 1;
-      const coords = pts.map((val, idx) => {
-        const x = (idx / (pts.length - 1)) * 400;
-        const y = 105 - ((val - min) / range) * 85;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      }).join(' ');
+  const pts = data.points;
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  const range = max - min || 1;
+  const coords = pts.map((val, idx) => {
+    const x = (idx / (pts.length - 1)) * 400;
+    const y = 105 - ((val - min) / range) * 85;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
 
-      const strokeColor = data.positive ? '#065F46' : '#F43F5E';
-      document.getElementById('market-svg-chart').innerHTML = `
-        <polyline fill="none" stroke="${strokeColor}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" points="${coords}" />
-      `;
+  const strokeColor = data.positive ? '#065F46' : '#F43F5E';
+  document.getElementById('market-svg-chart').innerHTML = `
+    <polyline fill="none" stroke="${strokeColor}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" points="${coords}" />
+  `;
 
-      document.getElementById('market-ticker-grid').innerHTML = Object.entries(MARKET_COINS).map(([sym, info]) => `
-        <button type="button" onclick="selectMarketCoin('${sym}')" class="text-left p-2.5 rounded-xl bg-white dark:bg-nikofy-darkBg border ${sym === coin ? 'border-nikofy-green' : 'border-slate-200 dark:border-nikofy-darkBorder'}">
-          <div class="flex items-center justify-between text-[11px] font-bold">
-            <span class="text-slate-900 dark:text-white">${sym}</span>
-            <span class="${info.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">${info.change}</span>
-          </div>
-          <div class="text-xs font-extrabold text-slate-600 dark:text-slate-300 tabular-nums mt-0.5">${formatNgn(info.price)}</div>
-        </button>
-      `).join('');
-    }
+  document.getElementById('market-ticker-grid').innerHTML = Object.entries(MARKET_COINS).map(([sym, info]) => `
+    <button type="button" onclick="selectMarketCoin('${sym}')" class="text-left p-2.5 rounded-xl bg-white dark:bg-nikofy-darkBg border ${sym === coin ? 'border-nikofy-green' : 'border-slate-200 dark:border-nikofy-darkBorder'}">
+      <div class="flex items-center justify-between text-[11px] font-bold">
+        <span class="text-slate-900 dark:text-white">${sym}</span>
+        <span class="${info.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">${info.change}</span>
+      </div>
+      <div class="text-xs font-extrabold text-slate-600 dark:text-slate-300 tabular-nums mt-0.5">${formatNgn(info.price)}</div>
+    </button>
+  `).join('');
+
+  if (!skipChartFetch) {
+    fetchLiveCoinChart(coin);
+  }
+}
+
 
     // =====================================================================
     // BUY / SELL CRYPTO
