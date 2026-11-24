@@ -1874,6 +1874,46 @@
     }
 
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+const COINGECKO_IDS = {
+  BTC: 'bitcoin',
+  USDT: 'tether',
+  ETH: 'ethereum',
+  BNB: 'binancecoin',
+  SOL: 'solana',
+};
+
+let isLoadingMarketChart = false;
+
+async function fetchLiveMarketPrices() {
+  try {
+    const ids = Object.values(COINGECKO_IDS).join(',');
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=ngn&include_24hr_change=true`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Price fetch failed: ${res.status}`);
+    const data = await res.json();
+
+    let updated = false;
+    Object.entries(COINGECKO_IDS).forEach(([sym, cgId]) => {
+      const entry = data[cgId];
+      if (entry && typeof entry.ngn === 'number' && entry.ngn > 0) {
+        MARKET_COINS[sym].price = entry.ngn;
+        if (typeof entry.ngn_24h_change === 'number') {
+          const pct = entry.ngn_24h_change;
+          MARKET_COINS[sym].positive = pct >= 0;
+          MARKET_COINS[sym].change = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+        }
+        updated = true;
+      }
+    });
+
+    if (updated) {
+      selectMarketCoin(appState.ui.marketCoin || 'BTC', { skipChartFetch: true });
+      updateTradeQuote();
+    }
+  } catch (err) {
+    console.warn('Using fallback crypto prices:', err.message || err);
+  }
+}
 
     const API_BASE_URL = "https://nikofy-backend.onrender.com";
 
