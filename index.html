@@ -1913,7 +1913,36 @@ async function fetchLiveMarketPrices() {
   } catch (err) {
     console.warn('Using fallback crypto prices:', err.message || err);
   }
-}
+} async function fetchLiveCoinChart(coin) {
+  const cgId = COINGECKO_IDS[coin];
+  if (!cgId || isLoadingMarketChart) return;
+  isLoadingMarketChart = true;
+
+  try {
+    const url = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(cgId)}/market_chart?vs_currency=ngn&days=7`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Chart fetch failed: ${res.status}`);
+    const data = await res.json();
+
+    const prices = Array.isArray(data.prices) ? data.prices.map((p) => p[1]).filter((n) => typeof n === 'number') : [];
+    if (prices.length >= 2) {
+      const step = Math.max(1, Math.floor(prices.length / 24));
+      const sampled = prices.filter((_, i) => i % step === 0);
+      if (sampled[sampled.length - 1] !== prices[prices.length - 1]) {
+        sampled.push(prices[prices.length - 1]);
+      }
+      MARKET_COINS[coin].points = sampled;
+      if ((appState.ui.marketCoin || 'BTC') === coin) {
+        selectMarketCoin(coin, { skipChartFetch: true });
+      }
+    }
+  } catch (err) {
+    console.warn(`Using fallback chart for ${coin}:`, err.message || err);
+  } finally {
+    isLoadingMarketChart = false;
+  }
+      }
+    
 
     const API_BASE_URL = "https://nikofy-backend.onrender.com";
 
