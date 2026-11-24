@@ -739,14 +739,47 @@
                 <input id="set-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="1234" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white outline-none" />
               </div>
               <div class="sm:col-span-2">
-                <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
-                  Save Security Settings
-                </button>
-              </div>
-            </form>
+            <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
+              Save Security Settings
+            </button>
           </div>
+        </form>
 
-          <!-- Google Authenticator 2FA Setup -->
+        <!-- Dedicated 4-Digit Transaction Passcode Setup & Change Card -->
+        <div class="pt-4 border-t border-slate-200 dark:border-nikofy-darkBorder space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">4-Digit Transaction Passcode</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Required to authorize every buy/sell, external crypto transfer, P2P, withdrawal &amp; bill payment.</p>
+            </div>
+            <span id="passcode-status-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full">Not Set</span>
+          </div>
+          <form onsubmit="handleSettingsPasscodeUpdate(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div id="settings-current-passcode-wrap" class="hidden">
+              <label for="set-current-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Current 4-Digit Passcode</label>
+              <input id="set-current-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="••••"
+                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
+            </div>
+            <div>
+              <label for="set-new-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">New 4-Digit Passcode</label>
+              <input id="set-new-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
+                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
+            </div>
+            <div>
+              <label for="set-confirm-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
+              <input id="set-confirm-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
+                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
+            </div>
+            <div class="sm:col-span-3">
+              <button type="submit" class="w-full py-2.5 rounded-xl bg-nikofy-blueAccent hover:bg-blue-800 text-white font-extrabold text-xs transition">
+                Save 4-Digit Transaction Passcode
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Google Authenticator 2FA Setup -->
           <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
             <div class="flex items-center justify-between">
               <div>
@@ -813,6 +846,66 @@
       </button>
     </div>
   </div>
+</div>
+
+<!-- Mandatory 4-Digit Transaction Passcode Setup Modal -->
+<div id="modal-setup-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+    <div class="flex items-center justify-between">
+      <span class="text-xs font-extrabold uppercase tracking-wider text-nikofy-green dark:text-emerald-400">Security Required</span>
+      <button type="button" onclick="cancelPendingPasscodeFlow()" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
+    </div>
+    <div>
+      <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Set Your 4-Digit Transaction Passcode</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Create a unique 4-digit passcode for your Nikofy.ng account. You will enter it to authorize every transaction.</p>
+    </div>
+    <form onsubmit="submitSetupPasscodeModal(event)" class="space-y-3">
+      <div>
+        <label for="setup-modal-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Enter 4-Digit Passcode</label>
+        <input id="setup-modal-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
+          class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
+      </div>
+      <div>
+        <label for="setup-modal-passcode-confirm" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
+        <input id="setup-modal-passcode-confirm" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
+          class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
+      </div>
+      <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
+        Save Passcode &amp; Continue Transaction
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Per-Transaction 4-Digit Passcode Verification Modal -->
+<div id="modal-verify-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+    <div class="flex items-center justify-between">
+      <span class="text-xs font-extrabold uppercase tracking-wider text-nikofy-blueAccent dark:text-sky-400">Authorize Transaction</span>
+      <button type="button" onclick="cancelPendingPasscodeFlow()" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
+    </div>
+    <div>
+      <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Enter 4-Digit Passcode</h3>
+      <p id="verify-passcode-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Confirm your Nikofy.ng transaction passcode to proceed.</p>
+    </div>
+    <form onsubmit="submitVerifyPasscodeModal(event)" class="space-y-4">
+      <div>
+        <label for="verify-modal-passcode-input" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">4-Digit Transaction Passcode</label>
+        <input id="verify-modal-passcode-input" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="••••"
+          class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.55em] text-slate-900 dark:text-white tabular-nums outline-none" />
+      </div>
+      <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+        <span>Protected by Nikofy.ng Passcode</span>
+        <button type="button" onclick="openPasscodeSetupFromVerify()" class="font-bold text-nikofy-green dark:text-emerald-400 hover:underline">Reset Passcode</button>
+      </div>
+      <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
+        Verify &amp; Execute Transaction
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Itemized Nikofy.ng Invoice Modal -->
 
   <!-- KYC Tier & Liveness Scan Modal -->
   <div id="modal-kyc" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
@@ -931,6 +1024,7 @@
           username: '@tunde_ng',
           password: 'password123',
           pin: '1234',
+          transactionPasscode: '',
           kycTier: 'TIER_1',
           kycStatus: 'Verified',
           frozen: false,
@@ -967,6 +1061,116 @@
     let appState = loadState();
     let captchaAnswers = { signin: 11, signup: 11 };
     let otpTimer = null;
+    let pendingTransactionAction = null;
+
+    function isValidFourDigitPasscode(code) {
+      return /^[0-9]{4}$/.test(String(code || '').trim());
+    }
+
+    function authorizeTransactionWithPasscode(summaryText, onAuthorized) {
+      if (!isValidFourDigitPasscode(appState.user.transactionPasscode)) {
+        pendingTransactionAction = { summaryText, onAuthorized };
+        document.getElementById('setup-modal-passcode').value = '';
+        document.getElementById('setup-modal-passcode-confirm').value = '';
+        document.getElementById('modal-setup-passcode').classList.remove('hidden');
+        document.getElementById('setup-modal-passcode').focus();
+        showToast('Please set up your 4-digit transaction passcode first.', 'info');
+        return;
+      }
+      pendingTransactionAction = { summaryText, onAuthorized };
+      document.getElementById('verify-passcode-summary').textContent = summaryText
+        ? `Authorize: ${summaryText}`
+        : 'Enter your 4-digit Nikofy.ng transaction passcode to complete this transaction.';
+      document.getElementById('verify-modal-passcode-input').value = '';
+      document.getElementById('modal-verify-passcode').classList.remove('hidden');
+      document.getElementById('verify-modal-passcode-input').focus();
+    }
+
+    function submitSetupPasscodeModal(e) {
+      e.preventDefault();
+      const p1 = document.getElementById('setup-modal-passcode').value.trim();
+      const p2 = document.getElementById('setup-modal-passcode-confirm').value.trim();
+      if (!isValidFourDigitPasscode(p1)) {
+        return showToast('Transaction passcode must be exactly 4 digits.', 'error');
+      }
+      if (p1 !== p2) {
+        return showToast('Passcodes do not match. Please re-enter.', 'error');
+      }
+      appState.user.transactionPasscode = p1;
+      saveState();
+      syncAllUI();
+      closeModal('modal-setup-passcode');
+      showToast('Your 4-digit transaction passcode is now active.', 'success');
+
+      if (pendingTransactionAction) {
+        const nextAction = pendingTransactionAction;
+        document.getElementById('verify-passcode-summary').textContent = nextAction.summaryText
+          ? `Authorize: ${nextAction.summaryText}`
+          : 'Enter your 4-digit Nikofy.ng transaction passcode to complete this transaction.';
+        document.getElementById('verify-modal-passcode-input').value = '';
+        document.getElementById('modal-verify-passcode').classList.remove('hidden');
+        document.getElementById('verify-modal-passcode-input').focus();
+      }
+    }
+
+    function submitVerifyPasscodeModal(e) {
+      e.preventDefault();
+      const entered = document.getElementById('verify-modal-passcode-input').value.trim();
+      if (!isValidFourDigitPasscode(entered)) {
+        return showToast('Enter your 4-digit numeric passcode.', 'error');
+      }
+      if (entered !== appState.user.transactionPasscode) {
+        document.getElementById('verify-modal-passcode-input').value = '';
+        return showToast('Incorrect 4-digit transaction passcode.', 'error');
+      }
+      const action = pendingTransactionAction;
+      pendingTransactionAction = null;
+      closeModal('modal-verify-passcode');
+      if (action && typeof action.onAuthorized === 'function') {
+        action.onAuthorized();
+      }
+    }
+
+    function openPasscodeSetupFromVerify() {
+      closeModal('modal-verify-passcode');
+      document.getElementById('setup-modal-passcode').value = '';
+      document.getElementById('setup-modal-passcode-confirm').value = '';
+      document.getElementById('modal-setup-passcode').classList.remove('hidden');
+      document.getElementById('setup-modal-passcode').focus();
+    }
+
+    function cancelPendingPasscodeFlow() {
+      pendingTransactionAction = null;
+      closeModal('modal-setup-passcode');
+      closeModal('modal-verify-passcode');
+      showToast('Transaction cancelled.', 'info');
+    }
+
+    function handleSettingsPasscodeUpdate(e) {
+      e.preventDefault();
+      const hasExisting = isValidFourDigitPasscode(appState.user.transactionPasscode);
+      const currentInput = document.getElementById('set-current-passcode').value.trim();
+      const nextCode = document.getElementById('set-new-passcode').value.trim();
+      const confirmCode = document.getElementById('set-confirm-passcode').value.trim();
+
+      if (hasExisting && currentInput !== appState.user.transactionPasscode) {
+        return showToast('Current 4-digit transaction passcode is incorrect.', 'error');
+      }
+      if (!isValidFourDigitPasscode(nextCode)) {
+        return showToast('New transaction passcode must be exactly 4 digits.', 'error');
+      }
+      if (nextCode !== confirmCode) {
+        return showToast('New passcode and confirmation do not match.', 'error');
+      }
+
+      appState.user.transactionPasscode = nextCode;
+      saveState();
+      document.getElementById('set-current-passcode').value = '';
+      document.getElementById('set-new-passcode').value = '';
+      document.getElementById('set-confirm-passcode').value = '';
+      syncAllUI();
+      showToast(hasExisting ? '4-digit transaction passcode updated.' : '4-digit transaction passcode enabled.', 'success');
+    }
 
     function loadState() {
       try {
@@ -1245,6 +1449,19 @@
 
       document.getElementById('set-email').value = appState.user.email;
       document.getElementById('set-phone').value = appState.user.phone;
+      const hasPasscode = isValidFourDigitPasscode(appState.user.transactionPasscode);
+      const passBadge = document.getElementById('passcode-status-badge');
+      if (passBadge) {
+        passBadge.textContent = hasPasscode ? 'Active (4-Digit)' : 'Setup Required';
+        passBadge.className = hasPasscode
+          ? 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+          : 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400';
+      }
+      const currentWrap = document.getElementById('settings-current-passcode-wrap');
+      if (currentWrap) {
+        currentWrap.classList.toggle('hidden', !hasPasscode);
+        document.getElementById('set-current-passcode').required = hasPasscode;
+      }
       const twoFaBadge = document.getElementById('twofa-status-badge');
       twoFaBadge.textContent = appState.user.twoFactorEnabled ? 'Enabled (Google Auth)' : 'Disabled';
       twoFaBadge.className = appState.user.twoFactorEnabled
@@ -1357,27 +1574,31 @@
         const ngn = Number(document.getElementById('trade-ngn-amount').value || 0);
         if (ngn > appState.balances.NGN) return showToast('Insufficient NGN balance.', 'error');
         const out = (ngn * 0.995) / rate;
-        appState.balances.NGN -= ngn;
-        appState.balances[asset] = (appState.balances[asset] || 0) + out;
-        recordAndOpenInvoice({
-          type: 'BUY_CRYPTO',
-          title: `Bought ${out.toFixed(4)} ${asset}`,
-          subtitle: `Paid ${formatNgn(ngn)}`,
-          amountText: `+${out.toFixed(4)} ${asset}`,
-          invoice: { 'NGN Paid': formatNgn(ngn), 'Spread (0.5%)': formatNgn(ngn * 0.005), 'Crypto Credited': `${out.toFixed(4)} ${asset}` }
+        authorizeTransactionWithPasscode(`Buy ${out.toFixed(4)} ${asset} for ${formatNgn(ngn)}`, () => {
+          appState.balances.NGN -= ngn;
+          appState.balances[asset] = (appState.balances[asset] || 0) + out;
+          recordAndOpenInvoice({
+            type: 'BUY_CRYPTO',
+            title: `Bought ${out.toFixed(4)} ${asset}`,
+            subtitle: `Paid ${formatNgn(ngn)}`,
+            amountText: `+${out.toFixed(4)} ${asset}`,
+            invoice: { 'NGN Paid': formatNgn(ngn), 'Spread (0.5%)': formatNgn(ngn * 0.005), 'Crypto Credited': `${out.toFixed(4)} ${asset}` }
+          });
         });
       } else {
         const amt = Number(document.getElementById('trade-crypto-amount').value || 0);
         if (amt > (appState.balances[asset] || 0)) return showToast(`Insufficient ${asset} balance.`, 'error');
         const netNgn = amt * rate * 0.995;
-        appState.balances[asset] -= amt;
-        appState.balances.NGN += netNgn;
-        recordAndOpenInvoice({
-          type: 'SELL_CRYPTO',
-          title: `Sold ${amt} ${asset}`,
-          subtitle: `Credited ${formatNgn(netNgn)}`,
-          amountText: `+${formatNgn(netNgn)}`,
-          invoice: { 'Crypto Sold': `${amt} ${asset}`, 'Net NGN Credited': formatNgn(netNgn) }
+        authorizeTransactionWithPasscode(`Sell ${amt} ${asset} for ${formatNgn(netNgn)}`, () => {
+          appState.balances[asset] -= amt;
+          appState.balances.NGN += netNgn;
+          recordAndOpenInvoice({
+            type: 'SELL_CRYPTO',
+            title: `Sold ${amt} ${asset}`,
+            subtitle: `Credited ${formatNgn(netNgn)}`,
+            amountText: `+${formatNgn(netNgn)}`,
+            invoice: { 'Crypto Sold': `${amt} ${asset}`, 'Net NGN Credited': formatNgn(netNgn) }
+          });
         });
       }
     }
@@ -1404,16 +1625,18 @@
       const fee = 30;
       if (gross <= fee) return showToast('Amount must exceed ₦30 fee.', 'error');
       const net = gross - fee;
-      appState.balances.NGN += net;
-      checkTier1AutoFreeze();
-      recordAndOpenInvoice({
-        type: 'NGN_DEPOSIT',
-        title: 'NGN Bank Deposit',
-        subtitle: `Gross ${formatNgn(gross)} • Fee ₦30.00`,
-        amountText: `+${formatNgn(net)}`,
-        invoice: { 'Gross Deposit': formatNgn(gross), 'Nikofy.ng Deposit Fee': '₦30.00', 'Net Credited': formatNgn(net) }
+      authorizeTransactionWithPasscode(`Deposit ${formatNgn(gross)} (Net ${formatNgn(net)} after ₦30 fee)`, () => {
+        appState.balances.NGN += net;
+        checkTier1AutoFreeze();
+        recordAndOpenInvoice({
+          type: 'NGN_DEPOSIT',
+          title: 'NGN Bank Deposit',
+          subtitle: `Gross ${formatNgn(gross)} • Fee ₦30.00`,
+          amountText: `+${formatNgn(net)}`,
+          invoice: { 'Gross Deposit': formatNgn(gross), 'Nikofy.ng Deposit Fee': '₦30.00', 'Net Credited': formatNgn(net) }
+        });
+        if (appState.user.frozen) showToast('Tier 1 Balance Limit (₦1M) exceeded! Account frozen.', 'error');
       });
-      if (appState.user.frozen) showToast('Tier 1 Balance Limit (₦1M) exceeded! Account frozen.', 'error');
     }
 
     function executeExternalCryptoTx(e) {
@@ -1428,24 +1651,28 @@
         if (appState.user.frozen) return showToast('Account Frozen: Upgrade to Tier 2 (NIN) first.', 'error');
         const total = amount + gas + fee18;
         if (total > appState.balances.USDT) return showToast(`Insufficient USDT (need ${total.toFixed(2)} USDT incl. gas + 1.8% fee).`, 'error');
-        appState.balances.USDT -= total;
-        recordAndOpenInvoice({
-          type: 'EXTERNAL_CRYPTO',
-          title: `External USDT Send (${net})`,
-          subtitle: `To External Wallet • 1.8% Fee + Gas`,
-          amountText: `-${total.toFixed(2)} USDT`,
-          invoice: { 'Amount Sent': `${amount.toFixed(2)} USDT`, 'Network Gas Fee': `${gas.toFixed(2)} USDT`, 'Nikofy.ng Fee (1.8%)': `${fee18.toFixed(2)} USDT`, 'Total Debited': `${total.toFixed(2)} USDT` }
+        authorizeTransactionWithPasscode(`Send ${amount.toFixed(2)} USDT (${net}) • Total ${total.toFixed(2)} USDT`, () => {
+          appState.balances.USDT -= total;
+          recordAndOpenInvoice({
+            type: 'EXTERNAL_CRYPTO',
+            title: `External USDT Send (${net})`,
+            subtitle: `To External Wallet • 1.8% Fee + Gas`,
+            amountText: `-${total.toFixed(2)} USDT`,
+            invoice: { 'Amount Sent': `${amount.toFixed(2)} USDT`, 'Network Gas Fee': `${gas.toFixed(2)} USDT`, 'Nikofy.ng Fee (1.8%)': `${fee18.toFixed(2)} USDT`, 'Total Debited': `${total.toFixed(2)} USDT` }
+          });
         });
       } else {
         const netCredited = Math.max(0, amount - gas - fee18);
-        appState.balances.USDT += netCredited;
-        checkTier1AutoFreeze();
-        recordAndOpenInvoice({
-          type: 'EXTERNAL_CRYPTO',
-          title: `External USDT Deposit (${net})`,
-          subtitle: `From Binance/Bybit • 1.8% Fee + Gas`,
-          amountText: `+${netCredited.toFixed(2)} USDT`,
-          invoice: { 'Gross Received': `${amount.toFixed(2)} USDT`, 'Network Gas Fee': `${gas.toFixed(2)} USDT`, 'Nikofy.ng Fee (1.8%)': `${fee18.toFixed(2)} USDT`, 'Net Credited': `${netCredited.toFixed(2)} USDT` }
+        authorizeTransactionWithPasscode(`Claim External USDT Deposit (${amount.toFixed(2)} USDT on ${net})`, () => {
+          appState.balances.USDT += netCredited;
+          checkTier1AutoFreeze();
+          recordAndOpenInvoice({
+            type: 'EXTERNAL_CRYPTO',
+            title: `External USDT Deposit (${net})`,
+            subtitle: `From Binance/Bybit • 1.8% Fee + Gas`,
+            amountText: `+${netCredited.toFixed(2)} USDT`,
+            invoice: { 'Gross Received': `${amount.toFixed(2)} USDT`, 'Network Gas Fee': `${gas.toFixed(2)} USDT`, 'Nikofy.ng Fee (1.8%)': `${fee18.toFixed(2)} USDT`, 'Net Credited': `${netCredited.toFixed(2)} USDT` }
+          });
         });
       }
     }
@@ -1457,13 +1684,15 @@
       const rec = document.getElementById('p2p-recipient').value.trim();
       const amt = Number(document.getElementById('p2p-amount').value || 0);
       if (amt > appState.balances[cur]) return showToast(`Insufficient ${cur} balance.`, 'error');
-      appState.balances[cur] -= amt;
-      recordAndOpenInvoice({
-        type: 'P2P_TRANSFER',
-        title: `P2P Send to ${rec}`,
-        subtitle: 'Instant Internal Transfer • ₦0 Fee',
-        amountText: `-${cur === 'NGN' ? formatNgn(amt) : amt + ' ' + cur}`,
-        invoice: { Recipient: rec, Amount: cur === 'NGN' ? formatNgn(amt) : `${amt} ${cur}`, 'Internal Fee': 'FREE' }
+      authorizeTransactionWithPasscode(`P2P ${cur === 'NGN' ? formatNgn(amt) : amt + ' ' + cur} to ${rec}`, () => {
+        appState.balances[cur] -= amt;
+        recordAndOpenInvoice({
+          type: 'P2P_TRANSFER',
+          title: `P2P Send to ${rec}`,
+          subtitle: 'Instant Internal Transfer • ₦0 Fee',
+          amountText: `-${cur === 'NGN' ? formatNgn(amt) : amt + ' ' + cur}`,
+          invoice: { Recipient: rec, Amount: cur === 'NGN' ? formatNgn(amt) : `${amt} ${cur}`, 'Internal Fee': 'FREE' }
+        });
       });
     }
 
@@ -1479,13 +1708,15 @@
       if (amt > limit) return showToast(`Exceeds ${KYC_LIMITS[appState.user.kycTier].name} daily limit (${formatNgn(limit)}).`, 'error');
       if (amt + fee > appState.balances.NGN) return showToast('Insufficient NGN balance (incl. ₦30 fee).', 'error');
 
-      appState.balances.NGN -= (amt + fee);
-      recordAndOpenInvoice({
-        type: 'BANK_WITHDRAWAL',
-        title: `Bank Withdrawal (${bank})`,
-        subtitle: `Acct ${acct} • Fee ₦30.00`,
-        amountText: `-${formatNgn(amt + fee)}`,
-        invoice: { Bank: bank, Account: acct, 'Withdrawal Amount': formatNgn(amt), 'Nikofy.ng Fee': '₦30.00', 'Total Debited': formatNgn(amt + fee) }
+      authorizeTransactionWithPasscode(`Withdraw ${formatNgn(amt)} to ${bank} (${acct}) + ₦30 fee`, () => {
+        appState.balances.NGN -= (amt + fee);
+        recordAndOpenInvoice({
+          type: 'BANK_WITHDRAWAL',
+          title: `Bank Withdrawal (${bank})`,
+          subtitle: `Acct ${acct} • Fee ₦30.00`,
+          amountText: `-${formatNgn(amt + fee)}`,
+          invoice: { Bank: bank, Account: acct, 'Withdrawal Amount': formatNgn(amt), 'Nikofy.ng Fee': '₦30.00', 'Total Debited': formatNgn(amt + fee) }
+        });
       });
     }
 
@@ -1537,17 +1768,19 @@
       const amt = Number(document.getElementById('bill-amount-ngn').value || 0);
       if (amt > appState.balances.NGN) return showToast('Insufficient NGN balance.', 'error');
 
-      appState.balances.NGN -= amt;
-      const token = cat === 'ELECTRICITY' ? `${Math.floor(1000+Math.random()*9000)}-${Math.floor(1000+Math.random()*9000)}-${Math.floor(1000+Math.random()*9000)}` : null;
-      const inv = { Biller: code, 'Customer ID': cust, 'Amount Paid': formatNgn(amt) };
-      if (token) inv['Meter Token'] = token;
+      authorizeTransactionWithPasscode(`Pay ${formatNgn(amt)} for ${code} ${cat} (${cust})`, () => {
+        appState.balances.NGN -= amt;
+        const token = cat === 'ELECTRICITY' ? `${Math.floor(1000+Math.random()*9000)}-${Math.floor(1000+Math.random()*9000)}-${Math.floor(1000+Math.random()*9000)}` : null;
+        const inv = { Biller: code, 'Customer ID': cust, 'Amount Paid': formatNgn(amt) };
+        if (token) inv['Meter Token'] = token;
 
-      recordAndOpenInvoice({
-        type: 'BILL_PAYMENT',
-        title: `${code} ${cat} Paid`,
-        subtitle: token ? `Meter ${cust} • Token: ${token}` : `ID: ${cust}`,
-        amountText: `-${formatNgn(amt)}`,
-        invoice: inv,
+        recordAndOpenInvoice({
+          type: 'BILL_PAYMENT',
+          title: `${code} ${cat} Paid`,
+          subtitle: token ? `Meter ${cust} • Token: ${token}` : `ID: ${cust}`,
+          amountText: `-${formatNgn(amt)}`,
+          invoice: inv,
+        });
       });
     }
 
