@@ -1881,7 +1881,7 @@
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
       if (appState.authenticated) enterDashboard();
     });
-  <const API_BASE_URL = "https://nikofy-backend.onrender.com";
+  const API_BASE_URL = "https://nikofy-backend.onrender.com";
 
 async function checkNikofyHealth() {
   const res = await fetch(`${API_BASE_URL}/health`);
