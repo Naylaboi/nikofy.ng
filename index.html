@@ -757,17 +757,17 @@
               <form onsubmit="handleSettingsPasscodeUpdate(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                 <div id="settings-current-passcode-wrap" class="hidden">
                   <label for="set-current-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Current 4-Digit Passcode</label>
-                  <input id="set-current-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="••••"
+                  <input id="set-current-passcode" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
                     class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
                 </div>
                 <div>
                   <label for="set-new-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">New 4-Digit Passcode</label>
-                  <input id="set-new-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
+                  <input id="set-new-passcode" type="password" inputmode="numeric" maxlength="4" required placeholder="4 digits"
                     class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
                 </div>
                 <div>
                   <label for="set-confirm-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
-                  <input id="set-confirm-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="4 digits"
+                  <input id="set-confirm-passcode" type="password" inputmode="numeric" maxlength="4" required placeholder="4 digits"
                     class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-extrabold tracking-[0.35em] text-slate-900 dark:text-white outline-none" />
                 </div>
                 <div class="sm:col-span-3">
@@ -861,12 +861,12 @@
       <form onsubmit="submitSetupPasscodeModal(event)" class="space-y-3">
         <div>
           <label for="setup-modal-passcode" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Enter 4-Digit Passcode</label>
-          <input id="setup-modal-passcode" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
+          <input id="setup-modal-passcode" type="password" inputmode="numeric" maxlength="4" required placeholder="0000"
             class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
         </div>
         <div>
           <label for="setup-modal-passcode-confirm" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm 4-Digit Passcode</label>
-          <input id="setup-modal-passcode-confirm" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="0000"
+          <input id="setup-modal-passcode-confirm" type="password" inputmode="numeric" maxlength="4" required placeholder="0000"
             class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.5em] text-slate-900 dark:text-white tabular-nums outline-none" />
         </div>
         <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
@@ -890,7 +890,7 @@
       <form onsubmit="submitVerifyPasscodeModal(event)" class="space-y-4">
         <div>
           <label for="verify-modal-passcode-input" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">4-Digit Transaction Passcode</label>
-          <input id="verify-modal-passcode-input" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="••••"
+          <input id="verify-modal-passcode-input" type="password" inputmode="numeric" maxlength="4" required placeholder="••••"
             class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.55em] text-slate-900 dark:text-white tabular-nums outline-none" />
         </div>
         <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
@@ -927,7 +927,7 @@
         </div>
         <div>
           <label for="kyc-id-number" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">11-Digit BVN / NIN Number</label>
-          <input id="kyc-id-number" type="text" maxlength="11" value="22334455667"
+          <input id="kyc-id-number" type="text" inputmode="numeric" maxlength="11" value="22334455667"
             class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white tabular-nums outline-none" />
         </div>
         <div>
@@ -970,6 +970,7 @@
   <!-- ===================================================================== -->
   <script>
     const STORAGE_KEY = 'nikofy_ng_state_v1';
+    const API_BASE_URL = 'https://nikofy-backend.onrender.com';
 
     const MARKET_COINS = {
       BTC: { name: 'Bitcoin (BTC / NGN)', price: 81186785, change: '-2.70%', positive: false, points: [83500000, 83100000, 82600000, 82900000, 82000000, 81500000, 81186785] },
@@ -1032,6 +1033,7 @@
         authenticated: false,
         theme: 'dark',
         user: {
+          id: 'usr_demo_01',
           phone: '+2348012345678',
           email: 'tunde@nikofy.ng',
           username: '@tunde_ng',
@@ -1040,6 +1042,7 @@
           transactionPasscode: '',
           kycTier: 'TIER_1',
           kycStatus: 'Verified',
+          dateOfBirth: '',
           frozen: false,
           twoFactorEnabled: false,
         },
@@ -1104,7 +1107,7 @@
       const p1 = document.getElementById('setup-modal-passcode').value.trim();
       const p2 = document.getElementById('setup-modal-passcode-confirm').value.trim();
       if (!isValidFourDigitPasscode(p1)) {
-        return showToast('Transaction passcode must be exactly 4 digits.', 'error');
+        return showToast('Transaction passcode must be 4 digits (0-9).', 'error');
       }
       if (p1 !== p2) {
         return showToast('Passcodes do not match. Please re-enter.', 'error');
@@ -1170,7 +1173,7 @@
         return showToast('Current 4-digit transaction passcode is incorrect.', 'error');
       }
       if (!isValidFourDigitPasscode(nextCode)) {
-        return showToast('New transaction passcode must be exactly 4 digits.', 'error');
+        return showToast('New transaction passcode must be 4 digits (0-9).', 'error');
       }
       if (nextCode !== confirmCode) {
         return showToast('New passcode and confirmation do not match.', 'error');
@@ -1190,7 +1193,15 @@
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return createDefaultState();
         const parsed = JSON.parse(raw);
-        return { ...createDefaultState(), ...parsed, user: { ...createDefaultState().user, ...(parsed.user || {}) }, balances: { ...createDefaultState().balances, ...(parsed.balances || {}) }, ui: { ...createDefaultState().ui, ...(parsed.ui || {}) } };
+        const def = createDefaultState();
+        return {
+          ...def,
+          ...parsed,
+          user: { ...def.user, ...(parsed.user || {}) },
+          balances: { ...def.balances, ...(parsed.balances || {}) },
+          ui: { ...def.ui, ...(parsed.ui || {}) },
+          ledger: Array.isArray(parsed.ledger) ? parsed.ledger : def.ledger,
+        };
       } catch (e) {
         return createDefaultState();
       }
@@ -1432,6 +1443,9 @@
           appState.user.frozen = true;
           saveState();
         }
+      } else if (appState.user.kycTier === 'TIER_2') {
+        appState.user.frozen = false;
+        saveState();
       }
     }
 
@@ -1609,6 +1623,7 @@
         authorizeTransactionWithPasscode(`Sell ${amt} ${asset} for ${formatNgn(netNgn)}`, () => {
           appState.balances[asset] -= amt;
           appState.balances.NGN += netNgn;
+          checkTier1AutoFreeze();
           recordAndOpenInvoice({
             type: 'SELL_CRYPTO',
             title: `Sold ${amt} ${asset}`,
@@ -1690,6 +1705,7 @@
             amountText: `+${netCredited.toFixed(2)} USDT`,
             invoice: { 'Gross Received': `${amount.toFixed(2)} USDT`, 'Network Gas Fee': `${gas.toFixed(2)} USDT`, 'Nikofy.ng Fee (1.8%)': `${fee18.toFixed(2)} USDT`, 'Net Credited': `${netCredited.toFixed(2)} USDT` }
           });
+          if (appState.user.frozen) showToast('Tier 1 USD Balance Limit ($5,000) exceeded! Account frozen.', 'error');
         });
       }
     }
@@ -1856,6 +1872,13 @@
     }
 
     function openKycModal() {
+      const dobInput = document.getElementById('kyc-dob');
+      if (dobInput) {
+        dobInput.max = new Date().toISOString().split('T')[0];
+        if (!dobInput.value && appState.user.dateOfBirth) {
+          dobInput.value = appState.user.dateOfBirth;
+        }
+      }
       handleKycTierChange();
       document.getElementById('modal-kyc').classList.remove('hidden');
     }
@@ -1938,24 +1961,30 @@
             currentBalanceNgn: Number(appState.balances?.NGN || 0),
           }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
         if (!res.ok || !data.ok) {
           showToast(data.error || 'KYC verification failed.', 'error');
           return;
         }
 
+        const nextTier = data.kycTier || tier;
+        const nextFrozen = typeof data.frozen === 'boolean'
+          ? data.frozen
+          : (nextTier === 'TIER_1' && Number(appState.balances?.NGN || 0) > 1000000);
+
         appState.user.kycStatus = 'Verified';
-        appState.user.kycTier = data.kycTier || tier;
-        appState.user.frozen = Boolean(data.frozen);
+        appState.user.kycTier = nextTier;
+        appState.user.dateOfBirth = dateOfBirth;
+        appState.user.frozen = nextFrozen;
         saveState();
         syncAllUI();
         closeModal('modal-kyc');
         showToast(
-          data.frozen
+          nextFrozen
             ? 'Verified, but account FROZEN: Tier 1 balance exceeds ₦1,000,000.'
-            : `Verified (${KYC_LIMITS[appState.user.kycTier]?.name || appState.user.kycTier})!`,
-          data.frozen ? 'error' : 'success'
+            : `Verified (${KYC_LIMITS[nextTier]?.name || nextTier})!`,
+          nextFrozen ? 'error' : 'success'
         );
       } catch (err) {
         showToast('Network error connecting to KYC server.', 'error');
@@ -1969,7 +1998,12 @@
       const pw = document.getElementById('set-password').value;
       const pin = document.getElementById('set-pin').value.trim();
       if (pw) appState.user.password = pw;
-      if (pin.length === 4) appState.user.pin = pin;
+      if (pin) {
+        if (!isValidFourDigitPasscode(pin)) {
+          return showToast('4-Digit Transaction PIN must be 4 digits (0-9).', 'error');
+        }
+        appState.user.pin = pin;
+      }
       saveState();
       syncAllUI();
       showToast('Account security settings updated.', 'success');
@@ -1977,7 +2011,7 @@
 
     function toggleGoogle2FA() {
       const code = document.getElementById('twofa-code-input').value.trim();
-      if (code.length !== 6) return showToast('Enter any 6-digit code from Google Authenticator to verify.', 'error');
+      if (!/^[0-9]{6}$/.test(code)) return showToast('Enter any 6-digit code from Google Authenticator to verify.', 'error');
       appState.user.twoFactorEnabled = !appState.user.twoFactorEnabled;
       document.getElementById('twofa-code-input').value = '';
       saveState();
@@ -2058,20 +2092,27 @@
       }
     }
 
-    const API_BASE_URL = "https://nikofy-backend.onrender.com";
+    async function parseJsonSafe(res) {
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { ok: false, error: text || `HTTP ${res.status}` };
+      }
+    }
 
     async function checkNikofyHealth() {
       const res = await fetch(`${API_BASE_URL}/health`);
-      return res.json();
+      return parseJsonSafe(res);
     }
 
     async function verifyNikofyPasscode(userId, passcode) {
       const res = await fetch(`${API_BASE_URL}/api/security/passcode/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, passcode })
       });
-      return res.json();
+      return parseJsonSafe(res);
     }
 
     async function evaluateNikofyTransfer({
@@ -2082,8 +2123,8 @@
       projectedBalanceAfterMinor = null
     }) {
       const res = await fetch(`${API_BASE_URL}/api/transactions/evaluate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
           channel,
@@ -2092,7 +2133,7 @@
           projectedBalanceAfterMinor
         })
       });
-      return res.json();
+      return parseJsonSafe(res);
     }
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -2111,17 +2152,17 @@
         fetchLiveCoinChart(initialCoin);
       }, 1500);
 
-      const testBtn = document.getElementById("test-backend-btn");
-      const statusText = document.getElementById("backend-status-text");
+      const testBtn = document.getElementById('test-backend-btn');
+      const statusText = document.getElementById('backend-status-text');
 
       if (testBtn && statusText) {
-        testBtn.addEventListener("click", async () => {
-          statusText.textContent = "Checking...";
+        testBtn.addEventListener('click', async () => {
+          statusText.textContent = 'Checking...';
           try {
             const data = await checkNikofyHealth();
-            statusText.textContent = data.ok ? "Backend Online" : "Backend Error";
+            statusText.textContent = data.ok ? 'Backend Online' : 'Backend Error';
           } catch (err) {
-            statusText.textContent = "Connection Failed";
+            statusText.textContent = 'Connection Failed';
           }
         });
       }
