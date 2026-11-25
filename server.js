@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 const express = require("express");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const { Pool } = require("pg");
 
 const app = express();
@@ -19,6 +21,9 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+const JWT_SECRET = process.env.JWT_SECRET || "nikofy-dev-secret-change-me";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+
 const NGN_FLAT_FEE_KOBO = 3000; // ₦30.00
 const CRYPTO_FEE_RATE = 0.018; // 1.8%
 const MAX_PASSCODE_ATTEMPTS = 5;
@@ -36,6 +41,18 @@ function verifyPasscode(pin, storedValue) {
   const originalBuf = Buffer.from(originalHash, "hex");
   if (candidateHash.length !== originalBuf.length) return false;
   return crypto.timingSafeEqual(candidateHash, originalBuf);
+}
+
+function signAuthToken(userRow) {
+  return jwt.sign(
+    {
+      sub: String(userRow.id),
+      email: userRow.email,
+      status: userRow.account_status || "ACTIVE"
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
 }
 
 function calculateFees({ channel, amountMinor, gasFeeMinor = 0 }) {
@@ -58,12 +75,178 @@ function calculateFees({ channel, amountMinor, gasFeeMinor = 0 }) {
   throw new Error("Unsupported channel. Expected NGN or CRYPTO.");
 }
 
+async function provisionUserDefaults(client, userId) {
+  await client.query(
+    `INSERT INTO kyc_profiles (
+      user_id, tier, kyc_status, bvn_verified, nin_verified, liveness_status,
+      daily_ngn_limit_kobo, max_ngn_balance_kobo, daily_usd_limit_cents, max_usd_balance_cents, updated_at
+    )
+    VALUES ($1, 'TIER_1', 'UNVERIFIED', FALSE, FALSE, 'PENDING', 20000000, 100000000, 10000, 500000, NOW())
+    ON CONFLICT (user_id) DO NOTHING`,
+    [userId]
+  );
+
+  const currencies = [
+    { asset: "NGN", network: "NGN_INSTANT", minorUnit: "KOBO" },
+    { asset: "USDT", network: "TRC20", minorUnit: "CENTS" },
+    { asset: "USDC", network: "ERC20", minorUnit: "CENTS" },
+    { asset: "BTC", network: "BITCOIN", minorUnit: "CENTS" },
+    { asset: "ETH", network: "ERC20", minorUnit: "CENTS" },
+    { asset: "BNB", network: "BEP20", minorUnit: "CENTS" }
+  ];
+
+  for (const c of currencies) {
+    try {
+      await client.query(
+        `INSERT INTO wallets (user_id, asset, currency, network, minor_unit, balance_minor, available_balance_minor)
+         VALUES ($1, $2, $2, $3, $4, 0, 0)
+         ON CONFLICT DO NOTHING`,
+        [userId, c.asset, c.network, c.minorUnit]
+      );
+    } catch (walletErr) {
+      // Fallback if wallets table has a slightly different column set
+      console.warn(`Wallet seed warning for ${c.asset}:`, walletErr.message);
+    }
+  }
+}
+
 app.get("/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() AS now");
     res.json({ ok: true, service: "nikofy-backend", dbTime: result.rows[0].now });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  const { fullName, email, phone, password, passcode } = req.body || {};
+
+  const cleanName = String(fullName || "").trim();
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const cleanPhone = String(phone || "").trim();
+  const rawPassword = String(password || "");
+
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ ok: false, error: "A valid email address is required." });
+  }
+  if (rawPassword.length < 8) {
+    return res.status(400).json({ ok: false, error: "Password must be at least 8 characters." });
+  }
+  if (passcode && !/^\d{4}$/.test(String(passcode))) {
+    return res.status(400).json({ ok: false, error: "Transaction passcode must be a 4-digit number." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const existing = await client.query(
+      `SELECT id FROM users WHERE LOWER(email) = $1`,
+      [cleanEmail]
+    );
+    if (existing.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "An account with this email already exists." });
+    }
+
+    const passwordHash = await bcrypt.hash(rawPassword, 12);
+    const passcodeHash = passcode ? hashPasscode(String(passcode)) : null;
+
+    const { rows } = await client.query(
+      `INSERT INTO users (
+        full_name, email, phone, password_hash, transaction_passcode_hash, account_status, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, 'ACTIVE', NOW(), NOW())
+      RETURNING id, full_name, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set, created_at`,
+      [cleanName || "Nikofy User", cleanEmail, cleanPhone || null, passwordHash, passcodeHash]
+    );
+
+    const user = rows[0];
+    await provisionUserDefaults(client, user.id);
+
+    await client.query("COMMIT");
+
+    const token = signAuthToken(user);
+    return res.status(201).json({
+      ok: true,
+      token,
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        accountStatus: user.account_status,
+        passcodeSet: Boolean(user.passcode_set),
+        kycTier: "TIER_1",
+        kycStatus: "UNVERIFIED"
+      }
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    if (err.code === "23505") {
+      return res.status(409).json({ ok: false, error: "An account with this email already exists." });
+    }
+    console.error("Register error:", err);
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body || {};
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const rawPassword = String(password || "");
+
+  if (!cleanEmail || !rawPassword) {
+    return res.status(400).json({ ok: false, error: "Email and password are required." });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.full_name, u.email, u.phone, u.password_hash, u.account_status, u.freeze_reason,
+              (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+              k.tier AS kyc_tier, k.kyc_status
+       FROM users u
+       LEFT JOIN kyc_profiles k ON k.user_id = u.id
+       WHERE LOWER(u.email) = $1`,
+      [cleanEmail]
+    );
+
+    if (!rows.length) {
+      return res.status(401).json({ ok: false, error: "Invalid email or password." });
+    }
+
+    const user = rows[0];
+    if (!user.password_hash) {
+      return res.status(401).json({ ok: false, error: "Password login is not configured for this account." });
+    }
+
+    const validPassword = await bcrypt.compare(rawPassword, user.password_hash);
+    if (!validPassword) {
+      return res.status(401).json({ ok: false, error: "Invalid email or password." });
+    }
+
+    const token = signAuthToken(user);
+    return res.json({
+      ok: true,
+      token,
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        accountStatus: user.account_status,
+        freezeReason: user.freeze_reason || null,
+        passcodeSet: Boolean(user.passcode_set),
+        kycTier: user.kyc_tier || "TIER_1",
+        kycStatus: user.kyc_status || "UNVERIFIED"
+      }
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -81,9 +264,9 @@ app.post("/api/security/passcode/set", async (req, res) => {
            passcode_failed_attempts = 0,
            passcode_locked_until = NULL,
            updated_at = NOW()
-       WHERE id = $2
+       WHERE id::text = $2
        RETURNING id, account_status`,
-      [hashed, userId]
+      [hashed, String(userId)]
     );
     if (!rows.length) {
       return res.status(404).json({ error: "User not found." });
@@ -103,8 +286,8 @@ app.post("/api/security/passcode/verify", async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, transaction_passcode_hash, passcode_failed_attempts, passcode_locked_until, account_status
-       FROM users WHERE id = $1`,
-      [userId]
+       FROM users WHERE id::text = $1`,
+      [String(userId)]
     );
     if (!rows.length) {
       return res.status(404).json({ error: "User not found." });
@@ -136,7 +319,7 @@ app.post("/api/security/passcode/verify", async (req, res) => {
              passcode_locked_until = $2,
              updated_at = NOW()
          WHERE id = $3`,
-        [nextAttempts, lockUntil, userId]
+        [nextAttempts, lockUntil, user.id]
       );
 
       return res.status(401).json({
@@ -153,7 +336,7 @@ app.post("/api/security/passcode/verify", async (req, res) => {
            passcode_locked_until = NULL,
            updated_at = NOW()
        WHERE id = $1`,
-      [userId]
+      [user.id]
     );
 
     return res.json({ ok: true, verified: true });
@@ -175,13 +358,15 @@ app.post("/api/transactions/evaluate", async (req, res) => {
     await client.query("BEGIN");
 
     const userRes = await client.query(
-      `SELECT id, account_status FROM users WHERE id = $1 FOR UPDATE`,
-      [userId]
+      `SELECT id, account_status FROM users WHERE id::text = $1 FOR UPDATE`,
+      [String(userId)]
     );
     if (!userRes.rows.length) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "User not found." });
     }
+
+    const dbUserId = userRes.rows[0].id;
 
     if (userRes.rows[0].account_status !== "ACTIVE") {
       await client.query("ROLLBACK");
@@ -195,7 +380,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
     const kycRes = await client.query(
       `SELECT tier, daily_ngn_limit_kobo, max_ngn_balance_kobo, daily_usd_limit_cents, max_usd_balance_cents
        FROM kyc_profiles WHERE user_id = $1`,
-      [userId]
+      [dbUserId]
     );
     const kyc = kycRes.rows[0] || {
       tier: "TIER_1",
@@ -217,7 +402,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
              freeze_reason = 'Tier 1 balance cap exceeded; Tier 2 KYC required.',
              updated_at = NOW()
          WHERE id = $1`,
-        [userId]
+        [dbUserId]
       );
       await client.query("COMMIT");
       return res.status(403).json({
@@ -231,7 +416,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
       `SELECT ngn_spent_kobo, usd_spent_cents
        FROM daily_spend_tracker
        WHERE user_id = $1 AND spend_date = CURRENT_DATE`,
-      [userId]
+      [dbUserId]
     );
     const spent = spendRes.rows[0] || { ngn_spent_kobo: 0, usd_spent_cents: 0 };
 
@@ -503,4 +688,3 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Nikofy backend listening on port ${port}`);
 });
-    
