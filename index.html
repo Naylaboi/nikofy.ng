@@ -1031,6 +1031,7 @@
     function createDefaultState() {
       return {
         authenticated: false,
+        authToken: '',
         theme: 'dark',
         user: {
           id: 'usr_demo_01',
@@ -1078,6 +1079,37 @@
     let captchaAnswers = { signin: 11, signup: 11 };
     let otpTimer = null;
     let pendingTransactionAction = null;
+
+    function getNikofyAuthHeaders(extra = {}) {
+      const headers = { 'Content-Type': 'application/json', ...extra };
+      if (appState.authToken) {
+        headers.Authorization = `Bearer ${appState.authToken}`;
+      }
+      return headers;
+    }
+
+    function applyBackendAuthPayload(data, fallbackUser = null) {
+      const token = data?.token || data?.accessToken || data?.data?.token || '';
+      const backendUser = data?.user || data?.data?.user || null;
+
+      if (token) {
+        appState.authToken = token;
+      }
+      if (backendUser && typeof backendUser === 'object') {
+        appState.user = {
+          ...appState.user,
+          ...(fallbackUser || {}),
+          id: backendUser.id || backendUser.userId || fallbackUser?.id || appState.user.id,
+          email: backendUser.email || fallbackUser?.email || appState.user.email,
+          phone: backendUser.phone || fallbackUser?.phone || appState.user.phone,
+          username: backendUser.username || fallbackUser?.username || appState.user.username,
+          kycTier: backendUser.kycTier || backendUser.kyc_tier || appState.user.kycTier,
+          kycStatus: backendUser.kycStatus || backendUser.kyc_status || appState.user.kycStatus,
+        };
+      } else if (fallbackUser) {
+        appState.user = { ...appState.user, ...fallbackUser };
+      }
+    }
 
     function isValidFourDigitPasscode(code) {
       return /^[0-9]{4}$/.test(String(code || '').trim());
@@ -1197,6 +1229,7 @@
         return {
           ...def,
           ...parsed,
+          authToken: typeof parsed.authToken === 'string' ? parsed.authToken : '',
           user: { ...def.user, ...(parsed.user || {}) },
           balances: { ...def.balances, ...(parsed.balances || {}) },
           ui: { ...def.ui, ...(parsed.ui || {}) },
@@ -1244,7 +1277,7 @@
     }
 
     // =====================================================================
-    // CAPTCHA & 6-DIGIT OTP AUTH
+    // CAPTCHA & 6-DIGIT OTP AUTH (WIRED TO /api/auth/login & /register)
     // =====================================================================
     function refreshCaptcha(mode) {
       const a = Math.floor(Math.random() * 9) + 2;
@@ -1270,9 +1303,10 @@
       showToast('Demo credentials & Captcha filled.', 'info');
     }
 
-    function handleSignInInitiate(e) {
+    async function handleSignInInitiate(e) {
       e.preventDefault();
-      const id = document.getElementById('signin-identifier').value.trim().toLowerCase();
+      const rawId = document.getElementById('signin-identifier').value.trim();
+      const id = rawId.toLowerCase();
       const pw = document.getElementById('signin-password').value;
       const cap = Number(document.getElementById('captcha-a-signin').value);
 
@@ -1281,6 +1315,40 @@
         refreshCaptcha('signin');
         return;
       }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            identifier: rawId,
+            email: rawId.includes('@') ? rawId : undefined,
+            phone: rawId.startsWith('+') ? rawId : undefined,
+            password: pw,
+          }),
+        });
+        const data = await parseJsonSafe(res);
+
+        if (res.ok && (data.ok !== false)) {
+          const candidate = {
+            ...appState.user,
+            email: rawId.includes('@') ? rawId : appState.user.email,
+            phone: rawId.startsWith('+') ? rawId : appState.user.phone,
+            password: pw,
+          };
+          applyBackendAuthPayload(data, candidate);
+          startOtpChallenge('signin', { ...appState.user });
+          return;
+        }
+
+        if (res.status === 400 || res.status === 401) {
+          showToast(data.error || data.message || 'Invalid credentials.', 'error');
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend login unavailable, using local fallback:', err.message || err);
+      }
+
       if ((id !== appState.user.email.toLowerCase() && id !== appState.user.phone.toLowerCase()) || pw !== appState.user.password) {
         showToast('Invalid credentials. Click "Fill Demo Account" to test.', 'error');
         return;
@@ -1288,7 +1356,7 @@
       startOtpChallenge('signin', { ...appState.user });
     }
 
-    function handleSignUpInitiate(e) {
+    async function handleSignUpInitiate(e) {
       e.preventDefault();
       const phone = document.getElementById('signup-phone').value.trim();
       const email = document.getElementById('signup-email').value.trim();
@@ -1307,7 +1375,45 @@
       }
       if (!username.startsWith('@')) username = '@' + username;
 
-      startOtpChallenge('signup', { ...appState.user, phone, email, username, password, kycTier: 'TIER_1', kycStatus: 'Unverified', frozen: false });
+      const candidateUser = {
+        ...appState.user,
+        phone,
+        email,
+        username,
+        password,
+        kycTier: 'TIER_1',
+        kycStatus: 'Unverified',
+        frozen: false,
+      };
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone,
+            email,
+            username,
+            password,
+          }),
+        });
+        const data = await parseJsonSafe(res);
+
+        if (res.ok && (data.ok !== false)) {
+          applyBackendAuthPayload(data, candidateUser);
+          startOtpChallenge('signup', { ...appState.user, ...candidateUser });
+          return;
+        }
+
+        if (res.status >= 400 && res.status < 500) {
+          showToast(data.error || data.message || 'Could not create account.', 'error');
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend register unavailable, using local fallback:', err.message || err);
+      }
+
+      startOtpChallenge('signup', candidateUser);
     }
 
     function startOtpChallenge(mode, candidateUser) {
@@ -1352,6 +1458,9 @@
         showToast('Invalid 6-digit OTP code.', 'error');
         return;
       }
+      if (appState.pendingOtp.candidateUser) {
+        appState.user = { ...appState.user, ...appState.pendingOtp.candidateUser };
+      }
       appState.authenticated = true;
       appState.pendingOtp = null;
       saveState();
@@ -1366,7 +1475,7 @@
         showToast('Both 6-digit codes must match.', 'error');
         return;
       }
-      appState.user = { ...appState.pendingOtp.candidateUser };
+      appState.user = { ...appState.user, ...appState.pendingOtp.candidateUser };
       appState.authenticated = true;
       appState.pendingOtp = null;
       saveState();
@@ -1403,6 +1512,7 @@
 
     function signOutUser() {
       appState.authenticated = false;
+      appState.authToken = '';
       saveState();
       document.getElementById('app-shell').classList.add('hidden');
       document.getElementById('auth-screen').classList.remove('hidden');
@@ -1951,7 +2061,7 @@
       try {
         const res = await fetch(`${API_BASE_URL}/api/kyc/verify`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getNikofyAuthHeaders(),
           body: JSON.stringify({
             userId: appState.user?.id || null,
             tier,
@@ -2109,7 +2219,7 @@
     async function verifyNikofyPasscode(userId, passcode) {
       const res = await fetch(`${API_BASE_URL}/api/security/passcode/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getNikofyAuthHeaders(),
         body: JSON.stringify({ userId, passcode })
       });
       return parseJsonSafe(res);
@@ -2124,7 +2234,7 @@
     }) {
       const res = await fetch(`${API_BASE_URL}/api/transactions/evaluate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getNikofyAuthHeaders(),
         body: JSON.stringify({
           userId,
           channel,
