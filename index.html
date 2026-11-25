@@ -913,14 +913,14 @@
       </div>
 
       <div class="bg-slate-50 dark:bg-nikofy-darkBg border border-slate-200 dark:border-nikofy-darkBorder rounded-2xl p-3.5 text-xs space-y-1">
-        <p class="text-slate-700 dark:text-slate-300"><strong>Tier 1 (BVN):</strong> Max ₦200k/day, $100/day &bull; Max Bal ₦1M / $5k</p>
-        <p class="text-nikofy-green dark:text-emerald-400"><strong>Tier 2 (NIN):</strong> Unlimited Balance &amp; 10x Daily Limits (₦2M / $1,000)</p>
+        <p class="text-slate-700 dark:text-slate-300"><strong>Tier 1 (BVN):</strong> Max ₦200k/day, $100/day &bull; Max Bal ₦1M / $5k (No selfie required)</p>
+        <p class="text-nikofy-green dark:text-emerald-400"><strong>Tier 2 (NIN):</strong> Unlimited Balance &amp; 10x Daily Limits (₦2M / $1,000) &bull; Selfie required</p>
       </div>
 
       <div class="space-y-3 text-xs">
         <div>
           <label for="kyc-tier-select" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Select Verification Level</label>
-          <select id="kyc-tier-select" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none">
+          <select id="kyc-tier-select" onchange="handleKycTierChange()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none">
             <option value="TIER_1">Tier 1 — BVN + Face &amp; Liveness Scan</option>
             <option value="TIER_2">Tier 2 — NIN + Face &amp; Liveness Scan (Unlocks Freeze)</option>
           </select>
@@ -935,8 +935,8 @@
           <input id="kyc-dob" type="date"
             class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none" />
         </div>
-        <div>
-          <label for="kyc-selfie-input" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Selfie Photo (Required for Tier 2)</label>
+        <div id="kyc-selfie-wrapper" class="hidden">
+          <label for="kyc-selfie-input" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Selfie Photo (Required for Tier 2 NIN)</label>
           <input id="kyc-selfie-input" type="file" accept="image/*" capture="user"
             class="w-full text-xs text-slate-600 dark:text-slate-300" />
         </div>
@@ -1845,13 +1845,28 @@
       document.getElementById('full-ledger-list').innerHTML = appState.ledger.map(rowHtml).join('');
     }
 
-    function openKycModal() { document.getElementById('modal-kyc').classList.remove('hidden'); }
+    function handleKycTierChange() {
+      const tier = document.getElementById('kyc-tier-select')?.value || 'TIER_1';
+      const wrapper = document.getElementById('kyc-selfie-wrapper');
+      const fileInput = document.getElementById('kyc-selfie-input');
+      const isTier2 = tier === 'TIER_2';
+
+      if (wrapper) wrapper.classList.toggle('hidden', !isTier2);
+      if (!isTier2 && fileInput) fileInput.value = '';
+    }
+
+    function openKycModal() {
+      handleKycTierChange();
+      document.getElementById('modal-kyc').classList.remove('hidden');
+    }
 
     async function submitKycLiveness(outcome = 'Verified') {
       const tier = document.getElementById('kyc-tier-select')?.value || 'TIER_1';
       const idNumber = document.getElementById('kyc-id-number')?.value?.trim() || '';
       const dateOfBirth = document.getElementById('kyc-dob')?.value || '';
-      const selfieFile = document.getElementById('kyc-selfie-input')?.files?.[0] || null;
+      const selfieFile = tier === 'TIER_2'
+        ? (document.getElementById('kyc-selfie-input')?.files?.[0] || null)
+        : null;
 
       if (outcome === 'Unverified') {
         appState.user.kycStatus = 'Unverified';
@@ -1868,6 +1883,11 @@
         syncAllUI();
         closeModal('modal-kyc');
         showToast('KYC Liveness Scan submitted: In Progress.', 'info');
+        return;
+      }
+
+      if (tier === 'TIER_2' && !selfieFile) {
+        showToast('Please select or capture a selfie photo for Tier 2 (NIN) verification.', 'error');
         return;
       }
 
@@ -2055,6 +2075,7 @@
       applyTheme();
       refreshCaptcha('signin');
       refreshCaptcha('signup');
+      handleKycTierChange();
       setBillCategory(appState.ui.billCategory || 'DATA');
       setTradeSide(appState.ui.tradeSide || 'buy');
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
