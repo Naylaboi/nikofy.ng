@@ -1,20 +1,25 @@
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- 1. Users & Security Credentials
-CREATE TABLE users (
-  id UUID PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   phone_e164 VARCHAR(20) UNIQUE NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   username VARCHAR(40) UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   transaction_passcode_hash TEXT, -- Set up before authorizing transactions
+  passcode_failed_attempts INTEGER NOT NULL DEFAULT 0,
+  passcode_locked_until TIMESTAMPTZ,
   two_fa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   two_fa_secret_encrypted TEXT,
   account_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', -- ACTIVE, FROZEN, SUSPENDED
   freeze_reason TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 2. KYC Tier & Verification Status (Tier 1: BVN + Liveness | Tier 2: NIN + Liveness)
-CREATE TABLE kyc_profiles (
+CREATE TABLE IF NOT EXISTS kyc_profiles (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   tier VARCHAR(10) NOT NULL DEFAULT 'TIER_1', -- TIER_1, TIER_2
   kyc_status VARCHAR(20) NOT NULL DEFAULT 'UNVERIFIED', -- UNVERIFIED, IN_PROGRESS, VERIFIED
@@ -22,15 +27,15 @@ CREATE TABLE kyc_profiles (
   nin_verified BOOLEAN NOT NULL DEFAULT FALSE,
   liveness_status VARCHAR(20) NOT NULL DEFAULT 'UNVERIFIED', -- UNVERIFIED, IN_PROGRESS, VERIFIED
   daily_ngn_limit_kobo BIGINT NOT NULL DEFAULT 20000000, -- ₦200,000.00 default Tier 1 (10x on Tier 2)
-  max_ngn_balance_kobo BIGINT, -- 100000000 (₦1,000,000) for Tier 1; NULL for Tier 2 unlimited
+  max_ngn_balance_kobo BIGINT DEFAULT 100000000, -- 100000000 (₦1,000,000) for Tier 1; NULL for Tier 2 unlimited
   daily_usd_limit_cents BIGINT NOT NULL DEFAULT 10000, -- $100.00 default Tier 1 (10x on Tier 2)
-  max_usd_balance_cents BIGINT, -- 500000 ($5,000) for Tier 1; NULL for Tier 2 unlimited
+  max_usd_balance_cents BIGINT DEFAULT 500000, -- 500000 ($5,000) for Tier 1; NULL for Tier 2 unlimited
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 3. Wallets / Sub-Ledgers (NGN in kobo, Crypto in smallest unit)
-CREATE TABLE wallets (
-  id UUID PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS wallets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   asset_code VARCHAR(20) NOT NULL, -- NGN, USDT, USDC, BTC, ETH, BNB
   available_minor BIGINT NOT NULL DEFAULT 0 CHECK (available_minor >= 0),
@@ -40,8 +45,8 @@ CREATE TABLE wallets (
 );
 
 -- 4. External Crypto Deposit Addresses
-CREATE TABLE crypto_addresses (
-  id UUID PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS crypto_addresses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   asset_code VARCHAR(20) NOT NULL, -- USDT, USDC, BTC, ETH, BNB
   network VARCHAR(20) NOT NULL, -- TRC20, BEP20, ERC20, BTC, BSC
@@ -50,8 +55,8 @@ CREATE TABLE crypto_addresses (
 );
 
 -- 5. Transactions & Itemized Fees (₦30 NGN / 1.8% + gas Crypto)
-CREATE TABLE transactions (
-  id UUID PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id),
   idempotency_key VARCHAR(120) UNIQUE NOT NULL,
   tx_type VARCHAR(30) NOT NULL, -- NGN_DEPOSIT, NGN_WITHDRAWAL, BUY_CRYPTO, SELL_CRYPTO, CRYPTO_DEPOSIT, CRYPTO_WITHDRAWAL, P2P_SEND, BILL_PAYMENT
@@ -64,9 +69,18 @@ CREATE TABLE transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 6. 6-Digit OTP Challenges (Sign-Up, Sign-In, Sensitive Actions)
-CREATE TABLE otp_challenges (
-  id UUID PRIMARY KEY,
+-- 6. Daily Spend Tracker (Used by /api/transactions/evaluate)
+CREATE TABLE IF NOT EXISTS daily_spend_tracker (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  spend_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  ngn_spent_kobo BIGINT NOT NULL DEFAULT 0,
+  usd_spent_cents BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, spend_date)
+);
+
+-- 7. 6-Digit OTP Challenges (Sign-Up, Sign-In, Sensitive Actions)
+CREATE TABLE IF NOT EXISTS otp_challenges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   contact_value VARCHAR(255) NOT NULL, -- Email or E.164 phone
   channel VARCHAR(10) NOT NULL, -- EMAIL, PHONE
   purpose VARCHAR(20) NOT NULL, -- SIGNUP, LOGIN, RESET
