@@ -1860,6 +1860,20 @@
       document.getElementById('modal-kyc').classList.remove('hidden');
     }
 
+    function isAtLeastEighteen(dateStr) {
+      if (!dateStr) return false;
+      const dob = new Date(dateStr);
+      if (Number.isNaN(dob.getTime())) return false;
+
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const monthDiff = today.getMonth() - dob.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age -= 1;
+      }
+      return age >= 18;
+    }
+
     async function submitKycLiveness(outcome = 'Verified') {
       const tier = document.getElementById('kyc-tier-select')?.value || 'TIER_1';
       const idNumber = document.getElementById('kyc-id-number')?.value?.trim() || '';
@@ -1883,6 +1897,16 @@
         syncAllUI();
         closeModal('modal-kyc');
         showToast('KYC Liveness Scan submitted: In Progress.', 'info');
+        return;
+      }
+
+      if (!/^[0-9]{11}$/.test(idNumber)) {
+        showToast('Enter a valid 11-digit BVN or NIN number.', 'error');
+        return;
+      }
+
+      if (!isAtLeastEighteen(dateOfBirth)) {
+        showToast('Enter a valid Date of Birth confirming you are at least 18 years old.', 'error');
         return;
       }
 
