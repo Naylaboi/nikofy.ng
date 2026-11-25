@@ -286,7 +286,7 @@ app.post("/api/kyc/verify", async (req, res) => {
       dateOfBirth,
       selfieImage,
       currentBalanceNgn = 0,
-    } = req.body;
+    } = req.body || {};
 
     const cleanId = String(idNumber || "").trim();
     if (!/^\d{11}$/.test(cleanId)) {
@@ -319,16 +319,16 @@ app.post("/api/kyc/verify", async (req, res) => {
           `${baseUrl}/api/v1/kyc/bvn?bvn=${encodeURIComponent(cleanId)}`,
           { method: "GET", headers }
         );
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.entity) {
           return res.status(400).json({
             ok: false,
             status: "FAILED",
-            error: data.error || "BVN verification failed.",
+            error: data.error || data.message || "BVN verification failed.",
           });
         }
-        verifiedDob = data.entity.date_of_birth || dateOfBirth;
-        fullName = `${data.entity.first_name || ""} ${data.entity.last_name || ""}`.trim();
+        verifiedDob = data.entity.date_of_birth || data.entity.birthdate || dateOfBirth;
+        fullName = `${data.entity.first_name || data.entity.firstname || ""} ${data.entity.last_name || data.entity.surname || ""}`.trim();
       } else {
         if (!selfieImage) {
           return res.status(400).json({
@@ -337,7 +337,7 @@ app.post("/api/kyc/verify", async (req, res) => {
             error: "A live selfie capture is required for Tier 2 verification.",
           });
         }
-        const cleanBase64 = String(selfieImage).replace(/^data:image\/\w+;base64,/, "");
+        const cleanBase64 = String(selfieImage).replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
         const response = await fetch(`${baseUrl}/api/v1/kyc/nin/verify`, {
           method: "POST",
           headers,
@@ -347,16 +347,16 @@ app.post("/api/kyc/verify", async (req, res) => {
             threshold: 90,
           }),
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.entity) {
           return res.status(400).json({
             ok: false,
             status: "FAILED",
-            error: data.error || "NIN + Selfie verification failed.",
+            error: data.error || data.message || "NIN + Selfie verification failed.",
           });
         }
-        verifiedDob = data.entity.date_of_birth || dateOfBirth;
-        fullName = `${data.entity.first_name || ""} ${data.entity.last_name || ""}`.trim();
+        verifiedDob = data.entity.date_of_birth || data.entity.birthdate || dateOfBirth;
+        fullName = `${data.entity.first_name || data.entity.firstname || ""} ${data.entity.last_name || data.entity.surname || ""}`.trim();
         faceMatched = Boolean(data.entity.selfie_verification?.match);
         confidenceValue = Number(data.entity.selfie_verification?.confidence_value || 0);
       }
@@ -408,53 +408,57 @@ app.post("/api/kyc/verify", async (req, res) => {
 
     const frozen = normalizedTier === "TIER_1" && Number(currentBalanceNgn) > 1000000;
 
-    if (userId) {
-      const isTier2 = normalizedTier === "TIER_2";
-      const nextDailyNgnLimitKobo = isTier2 ? 200000000 : 20000000;
-      const nextMaxNgnBalanceKobo = isTier2 ? null : 100000000;
-      const nextDailyUsdLimitCents = isTier2 ? 100000 : 10000;
-      const nextMaxUsdBalanceCents = isTier2 ? null : 500000;
+    if (userId && process.env.DATABASE_URL) {
+      try {
+        const isTier2 = normalizedTier === "TIER_2";
+        const nextDailyNgnLimitKobo = isTier2 ? 200000000 : 20000000;
+        const nextMaxNgnBalanceKobo = isTier2 ? null : 100000000;
+        const nextDailyUsdLimitCents = isTier2 ? 100000 : 10000;
+        const nextMaxUsdBalanceCents = isTier2 ? null : 500000;
 
-      await pool.query(
-        `INSERT INTO kyc_profiles (
-          user_id, tier, kyc_status, bvn_verified, nin_verified, liveness_status,
-          daily_ngn_limit_kobo, max_ngn_balance_kobo, daily_usd_limit_cents, max_usd_balance_cents, updated_at
-        )
-        VALUES ($1, $2, 'VERIFIED', $3, $4, 'VERIFIED', $5, $6, $7, $8, NOW())
-        ON CONFLICT (user_id) DO UPDATE SET
-          tier = EXCLUDED.tier,
-          kyc_status = 'VERIFIED',
-          bvn_verified = COALESCE(EXCLUDED.bvn_verified, kyc_profiles.bvn_verified),
-          nin_verified = COALESCE(EXCLUDED.nin_verified, kyc_profiles.nin_verified),
-          liveness_status = 'VERIFIED',
-          daily_ngn_limit_kobo = EXCLUDED.daily_ngn_limit_kobo,
-          max_ngn_balance_kobo = EXCLUDED.max_ngn_balance_kobo,
-          daily_usd_limit_cents = EXCLUDED.daily_usd_limit_cents,
-          max_usd_balance_cents = EXCLUDED.max_usd_balance_cents,
-          updated_at = NOW()`,
-        [
-          userId,
-          normalizedTier,
-          !isTier2,
-          isTier2,
-          nextDailyNgnLimitKobo,
-          nextMaxNgnBalanceKobo,
-          nextDailyUsdLimitCents,
-          nextMaxUsdBalanceCents,
-        ]
-      );
+        await pool.query(
+          `INSERT INTO kyc_profiles (
+            user_id, tier, kyc_status, bvn_verified, nin_verified, liveness_status,
+            daily_ngn_limit_kobo, max_ngn_balance_kobo, daily_usd_limit_cents, max_usd_balance_cents, updated_at
+          )
+          VALUES ($1, $2, 'VERIFIED', $3, $4, 'VERIFIED', $5, $6, $7, $8, NOW())
+          ON CONFLICT (user_id) DO UPDATE SET
+            tier = EXCLUDED.tier,
+            kyc_status = 'VERIFIED',
+            bvn_verified = COALESCE(EXCLUDED.bvn_verified, kyc_profiles.bvn_verified),
+            nin_verified = COALESCE(EXCLUDED.nin_verified, kyc_profiles.nin_verified),
+            liveness_status = 'VERIFIED',
+            daily_ngn_limit_kobo = EXCLUDED.daily_ngn_limit_kobo,
+            max_ngn_balance_kobo = EXCLUDED.max_ngn_balance_kobo,
+            daily_usd_limit_cents = EXCLUDED.daily_usd_limit_cents,
+            max_usd_balance_cents = EXCLUDED.max_usd_balance_cents,
+            updated_at = NOW()`,
+          [
+            String(userId),
+            normalizedTier,
+            !isTier2,
+            isTier2,
+            nextDailyNgnLimitKobo,
+            nextMaxNgnBalanceKobo,
+            nextDailyUsdLimitCents,
+            nextMaxUsdBalanceCents,
+          ]
+        );
 
-      await pool.query(
-        `UPDATE users
-         SET account_status = $2,
-             freeze_reason = $3
-         WHERE id = $1`,
-        [
-          userId,
-          frozen ? "FROZEN" : "ACTIVE",
-          frozen ? "Tier 1 balance limit (₦1,000,000) exceeded. Upgrade to Tier 2." : null,
-        ]
-      );
+        await pool.query(
+          `UPDATE users
+           SET account_status = $2,
+               freeze_reason = $3
+           WHERE id::text = $1`,
+          [
+            String(userId),
+            frozen ? "FROZEN" : "ACTIVE",
+            frozen ? "Tier 1 balance limit (₦1,000,000) exceeded. Upgrade to Tier 2." : null,
+          ]
+        );
+      } catch (dbErr) {
+        console.warn("KYC DB persistence skipped/failed:", dbErr.message);
+      }
     }
 
     return res.json({
@@ -477,6 +481,22 @@ app.post("/api/kyc/verify", async (req, res) => {
       error: "Server error while verifying KYC.",
     });
   }
+});
+
+app.use((err, req, res, next) => {
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({
+      ok: false,
+      status: "FAILED",
+      error: "Selfie image payload is too large. Please try a smaller photo."
+    });
+  }
+  console.error("Unhandled Express error:", err);
+  return res.status(err?.status || 500).json({
+    ok: false,
+    status: "FAILED",
+    error: "Server error while verifying KYC."
+  });
 });
 
 const port = process.env.PORT || 3000;
