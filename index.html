@@ -906,7 +906,7 @@
 
   <!-- KYC Tier & Liveness Scan Modal -->
   <div id="modal-kyc" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+    <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">KYC &amp; Liveness Verification</h3>
         <button type="button" onclick="closeModal('modal-kyc')" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Close</button>
@@ -930,19 +930,29 @@
           <input id="kyc-id-number" type="text" maxlength="11" value="22334455667"
             class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white tabular-nums outline-none" />
         </div>
+        <div>
+          <label for="kyc-dob" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Date of Birth</label>
+          <input id="kyc-dob" type="date"
+            class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none" />
+        </div>
+        <div>
+          <label for="kyc-selfie-input" class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Selfie Photo (Required for Tier 2)</label>
+          <input id="kyc-selfie-input" type="file" accept="image/*" capture="user"
+            class="w-full text-xs text-slate-600 dark:text-slate-300" />
+        </div>
       </div>
 
       <div class="bg-slate-50 dark:bg-nikofy-blue/50 border border-slate-200 dark:border-nikofy-darkBorder rounded-2xl p-3.5 space-y-2">
-        <p class="text-xs font-bold text-slate-900 dark:text-white">Simulate Face Recognition &amp; Liveness Scan Outcome:</p>
+        <p class="text-xs font-bold text-slate-900 dark:text-white">Submit Face Recognition &amp; Liveness Scan:</p>
         <div class="grid grid-cols-3 gap-2">
           <button type="button" onclick="submitKycLiveness('Verified')" class="py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-xs font-extrabold">
-            Verified
+            Verify KYC
           </button>
           <button type="button" onclick="submitKycLiveness('In Progress')" class="py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-extrabold">
             In Progress
           </button>
           <button type="button" onclick="submitKycLiveness('Unverified')" class="py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs font-extrabold">
-            Failed
+            Cancel
           </button>
         </div>
       </div>
@@ -1837,21 +1847,75 @@
 
     function openKycModal() { document.getElementById('modal-kyc').classList.remove('hidden'); }
 
-    function submitKycLiveness(outcome) {
-      const tier = document.getElementById('kyc-tier-select').value;
-      appState.user.kycStatus = outcome;
-      if (outcome === 'Verified') {
-        appState.user.kycTier = tier;
-        if (tier === 'TIER_2') appState.user.frozen = false;
-        showToast(`Liveness & Face Scan passed! Status: Verified (${KYC_LIMITS[tier].name}).`, 'success');
-      } else if (outcome === 'In Progress') {
-        showToast('KYC Liveness Scan submitted: In Progress.', 'info');
-      } else {
-        showToast('KYC Liveness Scan failed: Unverified.', 'error');
+    async function submitKycLiveness(outcome = 'Verified') {
+      const tier = document.getElementById('kyc-tier-select')?.value || 'TIER_1';
+      const idNumber = document.getElementById('kyc-id-number')?.value?.trim() || '';
+      const dateOfBirth = document.getElementById('kyc-dob')?.value || '';
+      const selfieFile = document.getElementById('kyc-selfie-input')?.files?.[0] || null;
+
+      if (outcome === 'Unverified') {
+        appState.user.kycStatus = 'Unverified';
+        saveState();
+        syncAllUI();
+        closeModal('modal-kyc');
+        showToast('KYC verification cancelled.', 'info');
+        return;
       }
-      saveState();
-      syncAllUI();
-      closeModal('modal-kyc');
+
+      if (outcome === 'In Progress') {
+        appState.user.kycStatus = 'In Progress';
+        saveState();
+        syncAllUI();
+        closeModal('modal-kyc');
+        showToast('KYC Liveness Scan submitted: In Progress.', 'info');
+        return;
+      }
+
+      let selfieImage = null;
+      if (selfieFile) {
+        selfieImage = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(selfieFile);
+        });
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/kyc/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: appState.user?.id || null,
+            tier,
+            idNumber,
+            dateOfBirth,
+            selfieImage,
+            currentBalanceNgn: Number(appState.balances?.NGN || 0),
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          showToast(data.error || 'KYC verification failed.', 'error');
+          return;
+        }
+
+        appState.user.kycStatus = 'Verified';
+        appState.user.kycTier = data.kycTier || tier;
+        appState.user.frozen = Boolean(data.frozen);
+        saveState();
+        syncAllUI();
+        closeModal('modal-kyc');
+        showToast(
+          data.frozen
+            ? 'Verified, but account FROZEN: Tier 1 balance exceeds ₦1,000,000.'
+            : `Verified (${KYC_LIMITS[appState.user.kycTier]?.name || appState.user.kycTier})!`,
+          data.frozen ? 'error' : 'success'
+        );
+      } catch (err) {
+        showToast('Network error connecting to KYC server.', 'error');
+      }
     }
 
     function saveAccountSettings(e) {
