@@ -68,22 +68,23 @@
   <div id="auth-screen" class="min-h-screen flex flex-col justify-between px-4 py-6 sm:py-10 max-w-md mx-auto">
     <div>
       <!-- Brand Header -->
-      <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-3">
-          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-nikofy-green to-nikofy-blueAccent flex items-center justify-center shadow-lg">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-            </svg>
-          </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Nikofy.ng</span>
-              <span class="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-nikofy-green/15 text-nikofy-green dark:bg-emerald-500/20 dark:text-emerald-300 border border-nikofy-green/30">NG</span>
-            </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Crypto &bull; P2P &bull; Instant Bills</p>
-          </div>
+      <div class="flex items-center justify-between mb-6 gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <!-- Light Mode Logo -->
+          <img
+            src="./assets/logo-light.jpg"
+            alt="Nikofy — Fast, Secure, Smart"
+            class="h-10 sm:h-11 w-auto max-w-[165px] object-contain rounded-xl block dark:hidden shrink-0"
+          />
+          <!-- Dark Mode Logo -->
+          <img
+            src="./assets/logo-dark.jpg"
+            alt="Nikofy — Fast, Secure, Smart"
+            class="h-10 sm:h-11 w-auto max-w-[165px] object-contain rounded-xl hidden dark:block shrink-0"
+          />
+          <span class="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-nikofy-green/15 text-nikofy-green dark:bg-emerald-500/20 dark:text-emerald-300 border border-nikofy-green/30 shrink-0">NG</span>
         </div>
-        <button type="button" onclick="toggleTheme()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder text-slate-700 dark:text-slate-200 transition">
+        <button type="button" onclick="toggleTheme()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder text-slate-700 dark:text-slate-200 transition shrink-0">
           <span class="theme-label">Light Mode</span>
         </button>
       </div>
@@ -269,14 +270,20 @@
     <header class="sticky top-0 z-30 bg-white/95 dark:bg-nikofy-darkBg/95 backdrop-blur-md border-b border-slate-200 dark:border-nikofy-darkBorder">
       <div class="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-nikofy-green to-nikofy-blueAccent flex items-center justify-center shrink-0">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-            </svg>
-          </div>
+          <!-- Light Mode Logo -->
+          <img
+            src="./assets/logo-light.jpg"
+            alt="Nikofy — Fast, Secure, Smart"
+            class="h-8 sm:h-9 w-auto max-w-[125px] object-contain rounded-lg block dark:hidden shrink-0"
+          />
+          <!-- Dark Mode Logo -->
+          <img
+            src="./assets/logo-dark.jpg"
+            alt="Nikofy — Fast, Secure, Smart"
+            class="h-8 sm:h-9 w-auto max-w-[125px] object-contain rounded-lg hidden dark:block shrink-0"
+          />
           <div class="truncate">
-            <div class="flex items-center gap-2">
-              <span class="font-extrabold text-sm text-slate-900 dark:text-white">Nikofy.ng</span>
+            <div class="flex items-center gap-1.5">
               <span id="header-kyc-status-badge" class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0">
                 Verified
               </span>
