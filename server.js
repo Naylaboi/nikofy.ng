@@ -276,6 +276,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
     client.release();
   }
 });
+
 app.post("/api/kyc/verify", async (req, res) => {
   try {
     const {
@@ -407,6 +408,55 @@ app.post("/api/kyc/verify", async (req, res) => {
 
     const frozen = normalizedTier === "TIER_1" && Number(currentBalanceNgn) > 1000000;
 
+    if (userId) {
+      const isTier2 = normalizedTier === "TIER_2";
+      const nextDailyNgnLimitKobo = isTier2 ? 200000000 : 20000000;
+      const nextMaxNgnBalanceKobo = isTier2 ? null : 100000000;
+      const nextDailyUsdLimitCents = isTier2 ? 100000 : 10000;
+      const nextMaxUsdBalanceCents = isTier2 ? null : 500000;
+
+      await pool.query(
+        `INSERT INTO kyc_profiles (
+          user_id, tier, kyc_status, bvn_verified, nin_verified, liveness_status,
+          daily_ngn_limit_kobo, max_ngn_balance_kobo, daily_usd_limit_cents, max_usd_balance_cents, updated_at
+        )
+        VALUES ($1, $2, 'VERIFIED', $3, $4, 'VERIFIED', $5, $6, $7, $8, NOW())
+        ON CONFLICT (user_id) DO UPDATE SET
+          tier = EXCLUDED.tier,
+          kyc_status = 'VERIFIED',
+          bvn_verified = COALESCE(EXCLUDED.bvn_verified, kyc_profiles.bvn_verified),
+          nin_verified = COALESCE(EXCLUDED.nin_verified, kyc_profiles.nin_verified),
+          liveness_status = 'VERIFIED',
+          daily_ngn_limit_kobo = EXCLUDED.daily_ngn_limit_kobo,
+          max_ngn_balance_kobo = EXCLUDED.max_ngn_balance_kobo,
+          daily_usd_limit_cents = EXCLUDED.daily_usd_limit_cents,
+          max_usd_balance_cents = EXCLUDED.max_usd_balance_cents,
+          updated_at = NOW()`,
+        [
+          userId,
+          normalizedTier,
+          !isTier2,
+          isTier2,
+          nextDailyNgnLimitKobo,
+          nextMaxNgnBalanceKobo,
+          nextDailyUsdLimitCents,
+          nextMaxUsdBalanceCents,
+        ]
+      );
+
+      await pool.query(
+        `UPDATE users
+         SET account_status = $2,
+             freeze_reason = $3
+         WHERE id = $1`,
+        [
+          userId,
+          frozen ? "FROZEN" : "ACTIVE",
+          frozen ? "Tier 1 balance limit (₦1,000,000) exceeded. Upgrade to Tier 2." : null,
+        ]
+      );
+    }
+
     return res.json({
       ok: true,
       userId,
@@ -433,4 +483,4 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Nikofy backend listening on port ${port}`);
 });
-              
+    
