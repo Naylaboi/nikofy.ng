@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const sgMail = require("@sendgrid/mail");
 const { Pool } = require("pg");
 
 const app = express();
@@ -24,10 +25,45 @@ const pool = new Pool({
 const JWT_SECRET = process.env.JWT_SECRET || "nikofy-dev-secret-change-me";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@nikofy.ng";
+const OTP_EXPIRY_MINUTES = 10;
+const MAX_OTP_ATTEMPTS = 5;
+
+if (SENDGRID_API_KEY) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+} else {
+  console.warn("SENDGRID_API_KEY is not set; OTP emails will fail until configured.");
+}
+
 const NGN_FLAT_FEE_KOBO = 3000; // ₦30.00
 const CRYPTO_FEE_RATE = 0.018; // 1.8%
 const MAX_PASSCODE_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+
+function hashOtpCode(code) {
+  return crypto.createHash("sha256").update(String(code)).digest("hex");
+}
+
+function generateSixDigitOtp() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+async function ensureOtpTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_otps (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      purpose TEXT NOT NULL DEFAULT 'LOGIN',
+      code_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at TIMESTAMPTZ NOT NULL,
+      consumed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_email_otps_lookup ON email_otps (email, purpose, created_at DESC);
+  `);
+}
 
 function hashPasscode(pin, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(pin, salt, 64).toString("hex");
@@ -116,6 +152,192 @@ app.get("/health", async (req, res) => {
     res.json({ ok: true, service: "nikofy-backend", dbTime: result.rows[0].now });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/auth/otp/send", async (req, res) => {
+  const { email, purpose = "LOGIN" } = req.body || {};
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const cleanPurpose = String(purpose || "LOGIN").trim().toUpperCase();
+
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ ok: false, error: "A valid email address is required." });
+  }
+  if (!SENDGRID_API_KEY) {
+    return res.status(500).json({ ok: false, error: "Email service is not configured on the server." });
+  }
+
+  try {
+    await ensureOtpTable();
+
+    const code = generateSixDigitOtp();
+    const codeHash = hashOtpCode(code);
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await pool.query(
+      `UPDATE email_otps
+       SET consumed_at = NOW()
+       WHERE email = $1 AND purpose = $2 AND consumed_at IS NULL`,
+      [cleanEmail, cleanPurpose]
+    );
+
+    await pool.query(
+      `INSERT INTO email_otps (email, purpose, code_hash, expires_at)
+       VALUES ($1, $2, $3, $4)`,
+      [cleanEmail, cleanPurpose, codeHash, expiresAt.toISOString()]
+    );
+
+    await sgMail.send({
+      to: cleanEmail,
+      from: FROM_EMAIL,
+      subject: `Your Nikofy verification code: ${code}`,
+      text: `Your Nikofy verification code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes. If you did not request this, ignore this email.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #0d1117; color: #f0f6fc; border-radius: 10px;">
+          <h2 style="margin-top: 0; color: #38bdf8;">Nikofy Verification Code</h2>
+          <p>Use the one-time code below to continue on <strong>nikofy.ng</strong>:</p>
+          <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 14px 20px; margin: 18px 0; background: #161b22; border: 1px solid #30363d; border-radius: 8px; text-align: center; color: #facc15;">
+            ${code}
+          </div>
+          <p style="font-size: 13px; color: #9ca3af;">This code expires in ${OTP_EXPIRY_MINUTES} minutes. If you did not request it, you can safely ignore this message.</p>
+        </div>
+      `
+    });
+
+    return res.json({
+      ok: true,
+      message: "Verification code sent to your email.",
+      expiresInSeconds: OTP_EXPIRY_MINUTES * 60
+    });
+  } catch (err) {
+    console.error("OTP send error:", err?.response?.body || err);
+    return res.status(500).json({ ok: false, error: "Failed to send verification code email." });
+  }
+});
+
+app.post("/api/auth/otp/verify", async (req, res) => {
+  const { email, code, purpose = "LOGIN", fullName } = req.body || {};
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const cleanCode = String(code || "").trim();
+  const cleanPurpose = String(purpose || "LOGIN").trim().toUpperCase();
+
+  if (!cleanEmail || !/^\d{6}$/.test(cleanCode)) {
+    return res.status(400).json({ ok: false, error: "Valid email and 6-digit code are required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await ensureOtpTable();
+
+    const { rows } = await client.query(
+      `SELECT id, code_hash, attempts, expires_at, consumed_at
+       FROM email_otps
+       WHERE email = $1 AND purpose = $2 AND consumed_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [cleanEmail, cleanPurpose]
+    );
+
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "No active verification code found. Please request a new one." });
+    }
+
+    const otpRow = rows[0];
+    if (new Date(otpRow.expires_at) <= new Date()) {
+      await client.query(`UPDATE email_otps SET consumed_at = NOW() WHERE id = $1`, [otpRow.id]);
+      await client.query("COMMIT");
+      return res.status(400).json({ ok: false, error: "Verification code has expired. Please request a new one." });
+    }
+
+    if (otpRow.attempts >= MAX_OTP_ATTEMPTS) {
+      await client.query(`UPDATE email_otps SET consumed_at = NOW() WHERE id = $1`, [otpRow.id]);
+      await client.query("COMMIT");
+      return res.status(429).json({ ok: false, error: "Too many invalid attempts. Please request a new code." });
+    }
+
+    const expectedBuf = Buffer.from(otpRow.code_hash, "hex");
+    const candidateBuf = Buffer.from(hashOtpCode(cleanCode), "hex");
+    const matches =
+      expectedBuf.length === candidateBuf.length &&
+      crypto.timingSafeEqual(expectedBuf, candidateBuf);
+
+    if (!matches) {
+      await client.query(
+        `UPDATE email_otps SET attempts = attempts + 1 WHERE id = $1`,
+        [otpRow.id]
+      );
+      await client.query("COMMIT");
+      return res.status(401).json({
+        ok: false,
+        error: "Invalid verification code.",
+        attemptsRemaining: Math.max(0, MAX_OTP_ATTEMPTS - (otpRow.attempts + 1))
+      });
+    }
+
+    await client.query(`UPDATE email_otps SET consumed_at = NOW() WHERE id = $1`, [otpRow.id]);
+
+    let userRes = await client.query(
+      `SELECT u.id, u.full_name, u.email, u.phone, u.account_status, u.freeze_reason,
+              (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+              k.tier AS kyc_tier, k.kyc_status
+       FROM users u
+       LEFT JOIN kyc_profiles k ON k.user_id = u.id
+       WHERE LOWER(u.email) = $1`,
+      [cleanEmail]
+    );
+
+    if (!userRes.rows.length) {
+      const randomPasswordHash = await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 12);
+      const inserted = await client.query(
+        `INSERT INTO users (full_name, email, password_hash, account_status, created_at, updated_at)
+         VALUES ($1, $2, $3, 'ACTIVE', NOW(), NOW())
+         RETURNING id, full_name, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set`,
+        [String(fullName || "").trim() || "Nikofy User", cleanEmail, randomPasswordHash]
+      );
+      const createdUser = inserted.rows[0];
+      await provisionUserDefaults(client, createdUser.id);
+
+      userRes = await client.query(
+        `SELECT u.id, u.full_name, u.email, u.phone, u.account_status, u.freeze_reason,
+                (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+                k.tier AS kyc_tier, k.kyc_status
+         FROM users u
+         LEFT JOIN kyc_profiles k ON k.user_id = u.id
+         WHERE u.id = $1`,
+        [createdUser.id]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    const user = userRes.rows[0];
+    const token = signAuthToken(user);
+
+    return res.json({
+      ok: true,
+      verified: true,
+      token,
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        accountStatus: user.account_status,
+        freezeReason: user.freeze_reason || null,
+        passcodeSet: Boolean(user.passcode_set),
+        kycTier: user.kyc_tier || "TIER_1",
+        kycStatus: user.kyc_status || "UNVERIFIED"
+      }
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("OTP verify error:", err);
+    return res.status(500).json({ ok: false, error: "Failed to verify code." });
+  } finally {
+    client.release();
   }
 });
 
