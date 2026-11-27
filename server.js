@@ -65,6 +65,61 @@ async function ensureOtpTable() {
   `);
 }
 
+async function ensureSchemaTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      full_name TEXT NOT NULL DEFAULT 'Nikofy User',
+      email TEXT UNIQUE NOT NULL,
+      phone TEXT,
+      password_hash TEXT,
+      transaction_passcode_hash TEXT,
+      passcode_failed_attempts INTEGER NOT NULL DEFAULT 0,
+      passcode_locked_until TIMESTAMPTZ,
+      account_status TEXT NOT NULL DEFAULT 'ACTIVE',
+      freeze_reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS kyc_profiles (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tier TEXT NOT NULL DEFAULT 'TIER_1',
+      kyc_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
+      bvn_verified BOOLEAN NOT NULL DEFAULT FALSE,
+      nin_verified BOOLEAN NOT NULL DEFAULT FALSE,
+      liveness_status TEXT NOT NULL DEFAULT 'PENDING',
+      daily_ngn_limit_kobo BIGINT NOT NULL DEFAULT 20000000,
+      max_ngn_balance_kobo BIGINT DEFAULT 100000000,
+      daily_usd_limit_cents BIGINT NOT NULL DEFAULT 10000,
+      max_usd_balance_cents BIGINT DEFAULT 500000,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS wallets (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      asset TEXT NOT NULL,
+      currency TEXT NOT NULL,
+      network TEXT NOT NULL,
+      minor_unit TEXT NOT NULL,
+      balance_minor BIGINT NOT NULL DEFAULT 0,
+      available_balance_minor BIGINT NOT NULL DEFAULT 0,
+      UNIQUE (user_id, asset, network)
+    );
+
+    CREATE TABLE IF NOT EXISTS daily_spend_tracker (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      spend_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      ngn_spent_kobo BIGINT NOT NULL DEFAULT 0,
+      usd_spent_cents BIGINT NOT NULL DEFAULT 0,
+      UNIQUE (user_id, spend_date)
+    );
+  `);
+}
+
 function hashPasscode(pin, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(pin, salt, 64).toString("hex");
   return `${salt}:${hash}`;
@@ -229,6 +284,7 @@ app.post("/api/auth/otp/verify", async (req, res) => {
   try {
     await client.query("BEGIN");
     await ensureOtpTable();
+    await ensureSchemaTables();
 
     const { rows } = await client.query(
       `SELECT id, code_hash, attempts, expires_at, consumed_at
@@ -362,6 +418,7 @@ app.post("/api/auth/register", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await ensureSchemaTables();
 
     const existing = await client.query(
       `SELECT id FROM users WHERE LOWER(email) = $1`,
@@ -426,6 +483,8 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
+    await ensureSchemaTables();
+
     const { rows } = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.phone, u.password_hash, u.account_status, u.freeze_reason,
               (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
@@ -817,6 +876,7 @@ app.post("/api/kyc/verify", async (req, res) => {
 
     if (userId && process.env.DATABASE_URL) {
       try {
+        await ensureSchemaTables();
         const isTier2 = normalizedTier === "TIER_2";
         const nextDailyNgnLimitKobo = isTier2 ? 200000000 : 20000000;
         const nextMaxNgnBalanceKobo = isTier2 ? null : 100000000;
@@ -907,6 +967,12 @@ app.use((err, req, res, next) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
+app.listen(port, async () => {
+  try {
+    await ensureSchemaTables();
+    await ensureOtpTable();
+  } catch (err) {
+    console.warn("Startup schema check warning:", err.message);
+  }
   console.log(`Nikofy backend listening on port ${port}`);
 });
