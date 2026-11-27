@@ -35,6 +35,11 @@ const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || "";
 const NOWPAYMENTS_BASE_URL = process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io";
 const PUBLIC_API_BASE_URL = process.env.PUBLIC_API_BASE_URL || "https://nikofy-ng-1.onrender.com";
 
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
+const VTPASS_API_KEY = process.env.VTPASS_API_KEY || "";
+const VTPASS_SECRET_KEY = process.env.VTPASS_SECRET_KEY || "";
+const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL || "https://api-service.vtpass.com/api";
+
 if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
 } else {
@@ -47,6 +52,14 @@ const CRYPTO_LOW_TIER_FEE_CENTS = 40; // $0.40 service fee for transactions < $1
 const CRYPTO_HIGH_TIER_FEE_CENTS = 80; // $0.80 service fee for transactions >= $1,000.00
 const MAX_PASSCODE_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+
+const BANK_CODES = {
+  GTBank: "058",
+  "Access Bank": "044",
+  "Zenith Bank": "057",
+  "Kuda Bank": "50211",
+  OPay: "999992"
+};
 
 const ASSET_NETWORK_MAP = {
   NGN: { network: "NGN_INSTANT", minorUnit: "KOBO", npCurrency: null },
@@ -251,6 +264,34 @@ async function ensureSchemaTables() {
       status TEXT NOT NULL DEFAULT 'PROCESSING',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS ngn_withdrawals (
+      id SERIAL PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      bank_name TEXT NOT NULL,
+      account_number TEXT NOT NULL,
+      amount_kobo BIGINT NOT NULL,
+      fee_kobo BIGINT NOT NULL DEFAULT 3000,
+      total_debit_kobo BIGINT NOT NULL,
+      provider_ref TEXT,
+      status TEXT NOT NULL DEFAULT 'PROCESSING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS bill_payments (
+      id SERIAL PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category TEXT NOT NULL,
+      provider_code TEXT NOT NULL,
+      customer_id TEXT NOT NULL,
+      amount_kobo BIGINT NOT NULL,
+      token_code TEXT,
+      provider_ref TEXT,
+      status TEXT NOT NULL DEFAULT 'COMPLETED',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 
@@ -296,6 +337,13 @@ function requireAuth(req, res, next) {
 }
 
 function calculateFees({ channel, amountMinor, gasFeeMinor = 0 }) {
+  if (channel === "P2P") {
+    return {
+      platformFeeMinor: 0,
+      gasFeeMinor: 0,
+      totalDebitMinor: amountMinor
+    };
+  }
   if (channel === "NGN") {
     return {
       platformFeeMinor: NGN_FLAT_FEE_KOBO,
@@ -315,7 +363,7 @@ function calculateFees({ channel, amountMinor, gasFeeMinor = 0 }) {
       totalDebitMinor: amountMinor + platformFeeMinor + gas
     };
   }
-  throw new Error("Unsupported channel. Expected NGN or CRYPTO.");
+  throw new Error("Unsupported channel. Expected P2P, NGN, or CRYPTO.");
 }
 
 async function provisionUserDefaults(client, userId) {
@@ -566,8 +614,9 @@ app.get("/api/users/lookup", requireAuth, async (req, res) => {
   }
 });
 
+// 100% FREE IN-APP P2P TRANSFER (NGN & CRYPTO — ZERO PLATFORM FEE & ZERO GAS FEE)
 app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
-  const { recipientUsername, asset = "USDT", amountMinor, passcode, note = null } = req.body || {};
+  const { recipientUsername, asset = "NGN", amountMinor, passcode, note = null } = req.body || {};
   const cleanRecipient = normalizeUsername(recipientUsername);
   const cleanAsset = String(asset || "").trim().toUpperCase();
   const amount = Number(amountMinor);
@@ -575,15 +624,16 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
   if (!cleanRecipient) {
     return res.status(400).json({ ok: false, error: "Recipient @username is required." });
   }
-  if (!ASSET_NETWORK_MAP[cleanAsset] || cleanAsset === "NGN") {
-    return res.status(400).json({ ok: false, error: "Unsupported P2P crypto asset." });
+  if (!ASSET_NETWORK_MAP[cleanAsset]) {
+    return res.status(400).json({ ok: false, error: "Unsupported P2P asset." });
   }
   if (!Number.isInteger(amount) || amount <= 0) {
     return res.status(400).json({ ok: false, error: "Positive integer amountMinor is required." });
   }
 
   const senderId = Number(req.auth.sub);
-  const fees = calculateFees({ channel: "CRYPTO", amountMinor: amount, gasFeeMinor: 0 });
+  const isNgn = cleanAsset === "NGN";
+  const fees = calculateFees({ channel: "P2P", amountMinor: amount, gasFeeMinor: 0 });
 
   const client = await pool.connect();
   try {
@@ -622,22 +672,29 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
     await provisionUserDefaults(client, recipient.id);
 
     const senderKycRes = await client.query(
-      `SELECT tier, daily_usd_limit_cents FROM kyc_profiles WHERE user_id = $1`,
+      `SELECT tier, daily_ngn_limit_kobo, daily_usd_limit_cents FROM kyc_profiles WHERE user_id = $1`,
       [senderId]
     );
-    const senderKyc = senderKycRes.rows[0] || { tier: "TIER_1", daily_usd_limit_cents: 10000 };
+    const senderKyc = senderKycRes.rows[0] || {
+      tier: "TIER_1",
+      daily_ngn_limit_kobo: 20000000,
+      daily_usd_limit_cents: 10000
+    };
 
     const spendRes = await client.query(
-      `SELECT usd_spent_cents FROM daily_spend_tracker WHERE user_id = $1 AND spend_date = CURRENT_DATE FOR UPDATE`,
+      `SELECT ngn_spent_kobo, usd_spent_cents FROM daily_spend_tracker WHERE user_id = $1 AND spend_date = CURRENT_DATE FOR UPDATE`,
       [senderId]
     );
-    const spentUsd = Number(spendRes.rows[0]?.usd_spent_cents || 0);
-    if (spentUsd + amount > Number(senderKyc.daily_usd_limit_cents)) {
+    const spentRow = spendRes.rows[0] || { ngn_spent_kobo: 0, usd_spent_cents: 0 };
+
+    if (isNgn) {
+      if (Number(spentRow.ngn_spent_kobo) + amount > Number(senderKyc.daily_ngn_limit_kobo)) {
+        await client.query("ROLLBACK");
+        return res.status(422).json({ ok: false, error: "Daily NGN limit exceeded for current KYC tier." });
+      }
+    } else if (Number(spentRow.usd_spent_cents) + amount > Number(senderKyc.daily_usd_limit_cents)) {
       await client.query("ROLLBACK");
-      return res.status(422).json({
-        ok: false,
-        error: "Daily USD-equivalent limit exceeded for current KYC tier."
-      });
+      return res.status(422).json({ ok: false, error: "Daily USD-equivalent limit exceeded for current KYC tier." });
     }
 
     const senderWalletRes = await client.query(
@@ -665,7 +722,7 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(400).json({
         ok: false,
-        error: `Insufficient ${cleanAsset} balance including $${(fees.platformFeeMinor / 100).toFixed(2)} service fee.`,
+        error: `Insufficient ${cleanAsset} balance.`,
         requiredMinor: fees.totalDebitMinor,
         availableMinor: Number(senderWallet.available_balance_minor)
       });
@@ -685,33 +742,45 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
 
     await client.query(
       `INSERT INTO daily_spend_tracker (user_id, spend_date, ngn_spent_kobo, usd_spent_cents)
-       VALUES ($1, CURRENT_DATE, 0, $2)
+       VALUES ($1, CURRENT_DATE, $2, $3)
        ON CONFLICT (user_id, spend_date) DO UPDATE SET
+         ngn_spent_kobo = daily_spend_tracker.ngn_spent_kobo + EXCLUDED.ngn_spent_kobo,
          usd_spent_cents = daily_spend_tracker.usd_spent_cents + EXCLUDED.usd_spent_cents`,
-      [senderId, amount]
+      [senderId, isNgn ? amount : 0, isNgn ? 0 : amount]
     );
 
     const recKycRes = await client.query(
-      `SELECT tier, max_usd_balance_cents FROM kyc_profiles WHERE user_id = $1`,
+      `SELECT tier, max_ngn_balance_kobo, max_usd_balance_cents FROM kyc_profiles WHERE user_id = $1`,
       [recipient.id]
     );
     const recKyc = recKycRes.rows[0];
-    if (recKyc && recKyc.tier === "TIER_1" && recKyc.max_usd_balance_cents && nextRecipientBalance > Number(recKyc.max_usd_balance_cents)) {
-      await client.query(
-        `UPDATE users
-         SET account_status = 'FROZEN',
-             freeze_reason = 'Tier 1 balance cap exceeded; Tier 2 KYC required.',
-             updated_at = NOW()
-         WHERE id = $1`,
-        [recipient.id]
-      );
+    if (recKyc && recKyc.tier === "TIER_1") {
+      if (isNgn && recKyc.max_ngn_balance_kobo && nextRecipientBalance > Number(recKyc.max_ngn_balance_kobo)) {
+        await client.query(
+          `UPDATE users
+           SET account_status = 'FROZEN',
+               freeze_reason = 'Tier 1 NGN balance cap exceeded; Tier 2 KYC required.',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [recipient.id]
+        );
+      } else if (!isNgn && recKyc.max_usd_balance_cents && nextRecipientBalance > Number(recKyc.max_usd_balance_cents)) {
+        await client.query(
+          `UPDATE users
+           SET account_status = 'FROZEN',
+               freeze_reason = 'Tier 1 balance cap exceeded; Tier 2 KYC required.',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [recipient.id]
+        );
+      }
     }
 
     const reference = `P2P_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     await client.query(
       `INSERT INTO p2p_transfers (reference, sender_user_id, recipient_user_id, asset, amount_minor, platform_fee_minor, note)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [reference, senderId, recipient.id, cleanAsset, amount, fees.platformFeeMinor, note ? String(note).slice(0, 140) : null]
+       VALUES ($1, $2, $3, $4, $5, 0, $6)`,
+      [reference, senderId, recipient.id, cleanAsset, amount, note ? String(note).slice(0, 140) : null]
     );
 
     const snapshot = await loadUserWalletSnapshot(client, senderId);
@@ -724,8 +793,159 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
       recipientName: recipient.full_name,
       asset: cleanAsset,
       amountMinor: amount,
-      platformFeeMinor: fees.platformFeeMinor,
+      platformFeeMinor: 0,
       gasFeeMinor: 0,
+      totalDebitMinor: amount,
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// LIVE NGN BANK WITHDRAWAL (₦30 FLAT FEE + PAYSTACK TRANSFER WHEN CONFIGURED)
+app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
+  const { bankName, accountNumber, amountKobo, passcode } = req.body || {};
+  const cleanBank = String(bankName || "").trim();
+  const cleanAcct = String(accountNumber || "").trim();
+  const amount = Number(amountKobo);
+
+  if (!cleanBank || !/^\d{10}$/.test(cleanAcct)) {
+    return res.status(400).json({ ok: false, error: "Bank name and valid 10-digit account number are required." });
+  }
+  if (!Number.isInteger(amount) || amount < 100000) {
+    return res.status(400).json({ ok: false, error: "Minimum NGN bank withdrawal is ₦1,000 (100000 kobo)." });
+  }
+
+  const userId = Number(req.auth.sub);
+  const fees = calculateFees({ channel: "NGN", amountMinor: amount });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+    await provisionUserDefaults(client, userId);
+
+    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
+    if (!pinCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+    }
+
+    const kycRes = await client.query(
+      `SELECT daily_ngn_limit_kobo FROM kyc_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    const dailyLimit = Number(kycRes.rows[0]?.daily_ngn_limit_kobo || 20000000);
+
+    const spendRes = await client.query(
+      `SELECT ngn_spent_kobo FROM daily_spend_tracker WHERE user_id = $1 AND spend_date = CURRENT_DATE FOR UPDATE`,
+      [userId]
+    );
+    const spentNgn = Number(spendRes.rows[0]?.ngn_spent_kobo || 0);
+    if (spentNgn + amount > dailyLimit) {
+      await client.query("ROLLBACK");
+      return res.status(422).json({ ok: false, error: "Daily NGN limit exceeded for current KYC tier." });
+    }
+
+    const walletRes = await client.query(
+      `SELECT id, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = 'NGN'
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [userId]
+    );
+    const wallet = walletRes.rows[0];
+    if (!wallet || Number(wallet.available_balance_minor) < fees.totalDebitMinor) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: "Insufficient NGN balance including ₦30.00 fee."
+      });
+    }
+
+    let providerRef = `NGN_WDR_${Date.now()}`;
+    let mode = "LEDGER_READY";
+
+    if (PAYSTACK_SECRET_KEY) {
+      const bankCode = BANK_CODES[cleanBank] || "058";
+      const recipResp = await fetch("https://api.paystack.co/transferrecipient", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          type: "nuban",
+          name: `Nikofy User ${userId}`,
+          account_number: cleanAcct,
+          bank_code: bankCode,
+          currency: "NGN"
+        })
+      });
+      const recipData = await recipResp.json().catch(() => ({}));
+      if (!recipResp.ok || !recipData.data?.recipient_code) {
+        await client.query("ROLLBACK");
+        return res.status(502).json({ ok: false, error: recipData.message || "Bank recipient lookup failed." });
+      }
+
+      const transferResp = await fetch("https://api.paystack.co/transfer", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          source: "balance",
+          amount,
+          recipient: recipData.data.recipient_code,
+          reason: `Nikofy.ng withdrawal (${cleanAcct})`
+        })
+      });
+      const transferData = await transferResp.json().catch(() => ({}));
+      if (!transferResp.ok || !transferData.status) {
+        await client.query("ROLLBACK");
+        return res.status(502).json({ ok: false, error: transferData.message || "Paystack transfer failed." });
+      }
+      mode = "LIVE_PAYSTACK";
+      providerRef = String(transferData.data?.transfer_code || transferData.data?.reference || providerRef);
+    }
+
+    const nextBalance = Number(wallet.balance_minor) - fees.totalDebitMinor;
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextBalance, wallet.id]
+    );
+    await client.query(
+      `INSERT INTO daily_spend_tracker (user_id, spend_date, ngn_spent_kobo, usd_spent_cents)
+       VALUES ($1, CURRENT_DATE, $2, 0)
+       ON CONFLICT (user_id, spend_date) DO UPDATE SET
+         ngn_spent_kobo = daily_spend_tracker.ngn_spent_kobo + EXCLUDED.ngn_spent_kobo`,
+      [userId, amount]
+    );
+
+    const reference = `NGN_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    await client.query(
+      `INSERT INTO ngn_withdrawals (
+        reference, user_id, bank_name, account_number, amount_kobo, fee_kobo, total_debit_kobo, provider_ref, status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED')`,
+      [reference, userId, cleanBank, cleanAcct, amount, fees.platformFeeMinor, fees.totalDebitMinor, providerRef]
+    );
+
+    const snapshot = await loadUserWalletSnapshot(client, userId);
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      mode,
+      reference,
+      providerRef,
+      amountMinor: amount,
+      platformFeeMinor: fees.platformFeeMinor,
       totalDebitMinor: fees.totalDebitMinor,
       wallets: snapshot.wallets,
       dailySpend: snapshot.dailySpend
@@ -735,6 +955,198 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
     return res.status(500).json({ ok: false, error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT
+app.post("/api/bills/pay", requireAuth, async (req, res) => {
+  const { category = "DATA", providerCode, customerId, amountKobo, passcode } = req.body || {};
+  const cleanCat = String(category || "DATA").trim().toUpperCase();
+  const cleanProv = String(providerCode || "").trim().toUpperCase();
+  const cleanCust = String(customerId || "").trim();
+  const amount = Number(amountKobo);
+
+  if (!cleanProv || !cleanCust || !Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ ok: false, error: "Provider, customer ID, and positive amountKobo are required." });
+  }
+
+  const userId = Number(req.auth.sub);
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+    await provisionUserDefaults(client, userId);
+
+    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
+    if (!pinCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+    }
+
+    const walletRes = await client.query(
+      `SELECT id, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = 'NGN'
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [userId]
+    );
+    const wallet = walletRes.rows[0];
+    if (!wallet || Number(wallet.available_balance_minor) < amount) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "Insufficient NGN balance for bill payment." });
+    }
+
+    const reference = `BILL_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    let providerRef = reference;
+    let tokenCode = cleanCat === "ELECTRICITY"
+      ? `${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}`
+      : null;
+
+    if (VTPASS_API_KEY && VTPASS_SECRET_KEY) {
+      const vtResp = await fetch(`${VTPASS_BASE_URL}/pay`, {
+        method: "POST",
+        headers: {
+          "api-key": VTPASS_API_KEY,
+          "secret-key": VTPASS_SECRET_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          request_id: reference,
+          serviceID: cleanProv.toLowerCase(),
+          billersCode: cleanCust,
+          phone: cleanCust,
+          amount: Math.round(amount / 100)
+        })
+      });
+      const vtData = await vtResp.json().catch(() => ({}));
+      if (!vtResp.ok || (vtData.code && vtData.code !== "000")) {
+        await client.query("ROLLBACK");
+        return res.status(502).json({ ok: false, error: vtData.response_description || "Bill provider failed." });
+      }
+      providerRef = String(vtData.requestId || vtData.transactionId || reference);
+      if (vtData.purchased_code) {
+        tokenCode = String(vtData.purchased_code);
+      }
+    }
+
+    const nextBalance = Number(wallet.balance_minor) - amount;
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextBalance, wallet.id]
+    );
+    await client.query(
+      `INSERT INTO daily_spend_tracker (user_id, spend_date, ngn_spent_kobo, usd_spent_cents)
+       VALUES ($1, CURRENT_DATE, $2, 0)
+       ON CONFLICT (user_id, spend_date) DO UPDATE SET
+         ngn_spent_kobo = daily_spend_tracker.ngn_spent_kobo + EXCLUDED.ngn_spent_kobo`,
+      [userId, amount]
+    );
+
+    await client.query(
+      `INSERT INTO bill_payments (
+        reference, user_id, category, provider_code, customer_id, amount_kobo, token_code, provider_ref, status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED')`,
+      [reference, userId, cleanCat, cleanProv, cleanCust, amount, tokenCode, providerRef]
+    );
+
+    const snapshot = await loadUserWalletSnapshot(client, userId);
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      reference,
+      providerRef,
+      tokenCode,
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// USER TRANSACTION LEDGER
+app.get("/api/ledger", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  try {
+    await ensureSchemaTables();
+    const { rows } = await pool.query(
+      `
+      SELECT * FROM (
+        SELECT
+          p.reference AS id,
+          'P2P_TRANSFER' AS type,
+          CASE WHEN p.sender_user_id = $1
+            THEN CONCAT('Free P2P Send to @', r.username)
+            ELSE CONCAT('Free P2P Received from @', s.username)
+          END AS title,
+          CONCAT(p.asset, ' • Fee 0') AS subtitle,
+          CASE WHEN p.sender_user_id = $1 THEN '-' ELSE '+' END ||
+          CASE WHEN p.asset = 'NGN'
+            THEN CONCAT('₦', TO_CHAR(p.amount_minor / 100.0, 'FM999,999,990.00'))
+            ELSE CONCAT('$', TO_CHAR(p.amount_minor / 100.0, 'FM999,999,990.00'), ' ', p.asset)
+          END AS amount_text,
+          'COMPLETED' AS status,
+          p.created_at
+        FROM p2p_transfers p
+        JOIN users s ON s.id = p.sender_user_id
+        JOIN users r ON r.id = p.recipient_user_id
+        WHERE p.sender_user_id = $1 OR p.recipient_user_id = $1
+
+        UNION ALL
+
+        SELECT
+          w.reference AS id,
+          'EXTERNAL_CRYPTO' AS type,
+          CONCAT('External ', w.asset, ' Send (', w.network, ')') AS title,
+          CONCAT('Fee $', TO_CHAR(w.platform_fee_minor / 100.0, 'FM990.00'), ' + Gas $', TO_CHAR(w.gas_fee_minor / 100.0, 'FM990.00')) AS subtitle,
+          CONCAT('-$', TO_CHAR(w.total_debit_minor / 100.0, 'FM999,999,990.00')) AS amount_text,
+          w.status,
+          w.created_at
+        FROM crypto_withdrawals w
+        WHERE w.user_id = $1
+
+        UNION ALL
+
+        SELECT
+          n.reference AS id,
+          'BANK_WITHDRAWAL' AS type,
+          CONCAT('Bank Withdrawal (', n.bank_name, ')') AS title,
+          CONCAT('Acct ', n.account_number, ' • Fee ₦30.00') AS subtitle,
+          CONCAT('-₦', TO_CHAR(n.total_debit_kobo / 100.0, 'FM999,999,990.00')) AS amount_text,
+          n.status,
+          n.created_at
+        FROM ngn_withdrawals n
+        WHERE n.user_id = $1
+
+        UNION ALL
+
+        SELECT
+          b.reference AS id,
+          'BILL_PAYMENT' AS type,
+          CONCAT(b.provider_code, ' ', b.category, ' Paid') AS title,
+          CASE WHEN b.token_code IS NOT NULL
+            THEN CONCAT('Meter ', b.customer_id, ' • Token: ', b.token_code)
+            ELSE CONCAT('ID: ', b.customer_id)
+          END AS subtitle,
+          CONCAT('-₦', TO_CHAR(b.amount_kobo / 100.0, 'FM999,999,990.00')) AS amount_text,
+          b.status,
+          b.created_at
+        FROM bill_payments b
+        WHERE b.user_id = $1
+      ) combined
+      ORDER BY created_at DESC
+      LIMIT 50
+      `,
+      [userId]
+    );
+    return res.json({ ok: true, items: rows });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -1738,7 +2150,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
           spentTodayMinor: Number(spent.ngn_spent_kobo)
         });
       }
-    } else {
+    } else if (channel !== "P2P") {
       const nextSpentUsd = Number(spent.usd_spent_cents) + amount;
       if (nextSpentUsd > Number(kyc.daily_usd_limit_cents)) {
         await client.query("ROLLBACK");
