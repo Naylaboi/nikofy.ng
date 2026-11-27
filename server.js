@@ -41,6 +41,37 @@ const CRYPTO_FEE_RATE = 0.018; // 1.8%
 const MAX_PASSCODE_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
+function normalizeUsername(rawUsername) {
+  if (rawUsername === undefined || rawUsername === null) return null;
+  const cleaned = String(rawUsername).trim().toLowerCase().replace(/^@+/, "");
+  return cleaned.length ? cleaned : null;
+}
+
+function normalizePhone(rawPhone) {
+  if (rawPhone === undefined || rawPhone === null) return null;
+  const digits = String(rawPhone).replace(/[^\d+]/g, "").replace(/^\+/, "");
+  if (!digits) return null;
+  if (digits.startsWith("234") && digits.length === 13) {
+    return digits;
+  }
+  if (digits.startsWith("0") && digits.length === 11) {
+    return `234${digits.slice(1)}`;
+  }
+  return digits;
+}
+
+function formatConflictMessage(err) {
+  const detail = String(err?.detail || "").toLowerCase();
+  const constraint = String(err?.constraint || "").toLowerCase();
+  if (constraint.includes("username") || detail.includes("username")) {
+    return "This username is already taken. Please choose another one.";
+  }
+  if (constraint.includes("phone") || detail.includes("phone")) {
+    return "This phone number is already linked to another account.";
+  }
+  return "An account with this email already exists.";
+}
+
 function hashOtpCode(code) {
   return crypto.createHash("sha256").update(String(code)).digest("hex");
 }
@@ -70,8 +101,10 @@ async function ensureSchemaTables() {
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       full_name TEXT NOT NULL DEFAULT 'Nikofy User',
+      username TEXT,
       email TEXT UNIQUE NOT NULL,
       phone TEXT,
+      normalized_phone TEXT,
       password_hash TEXT,
       transaction_passcode_hash TEXT,
       passcode_failed_attempts INTEGER NOT NULL DEFAULT 0,
@@ -81,6 +114,30 @@ async function ensureSchemaTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS normalized_phone TEXT;
+
+    UPDATE users
+    SET normalized_phone = CASE
+      WHEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') ~ '^234[0-9]{10}$'
+        THEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')
+      WHEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') ~ '^0[0-9]{10}$'
+        THEN '234' || substr(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 2)
+      WHEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') <> ''
+        THEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')
+      ELSE NULL
+    END
+    WHERE phone IS NOT NULL AND normalized_phone IS NULL;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+      ON users (LOWER(email));
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower
+      ON users (LOWER(username))
+      WHERE username IS NOT NULL AND BTRIM(username) <> '';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique
+      ON users (normalized_phone)
+      WHERE normalized_phone IS NOT NULL AND BTRIM(normalized_phone) <> '';
 
     CREATE TABLE IF NOT EXISTS kyc_profiles (
       id SERIAL PRIMARY KEY,
@@ -271,13 +328,22 @@ app.post("/api/auth/otp/send", async (req, res) => {
 });
 
 app.post("/api/auth/otp/verify", async (req, res) => {
-  const { email, code, purpose = "LOGIN", fullName } = req.body || {};
+  const { email, code, purpose = "LOGIN", fullName, username, phone } = req.body || {};
   const cleanEmail = String(email || "").trim().toLowerCase();
   const cleanCode = String(code || "").trim();
   const cleanPurpose = String(purpose || "LOGIN").trim().toUpperCase();
+  const cleanUsername = normalizeUsername(username);
+  const cleanPhone = String(phone || "").trim() || null;
+  const canonicalPhone = normalizePhone(cleanPhone);
 
   if (!cleanEmail || !/^\d{6}$/.test(cleanCode)) {
     return res.status(400).json({ ok: false, error: "Valid email and 6-digit code are required." });
+  }
+  if (cleanUsername && !/^[a-z0-9_]{3,24}$/.test(cleanUsername)) {
+    return res.status(400).json({
+      ok: false,
+      error: "Username must be 3-24 characters using letters, numbers, or underscores."
+    });
   }
 
   const client = await pool.connect();
@@ -336,7 +402,7 @@ app.post("/api/auth/otp/verify", async (req, res) => {
     await client.query(`UPDATE email_otps SET consumed_at = NOW() WHERE id = $1`, [otpRow.id]);
 
     let userRes = await client.query(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.account_status, u.freeze_reason,
+      `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.account_status, u.freeze_reason,
               (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
               k.tier AS kyc_tier, k.kyc_status
        FROM users u
@@ -346,18 +412,55 @@ app.post("/api/auth/otp/verify", async (req, res) => {
     );
 
     if (!userRes.rows.length) {
+      if (cleanUsername) {
+        const usernameTaken = await client.query(
+          `SELECT id FROM users WHERE LOWER(username) = $1`,
+          [cleanUsername]
+        );
+        if (usernameTaken.rows.length > 0) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            ok: false,
+            error: "This username is already taken. Please choose another one."
+          });
+        }
+      }
+
+      if (canonicalPhone) {
+        const phoneTaken = await client.query(
+          `SELECT id FROM users WHERE normalized_phone = $1`,
+          [canonicalPhone]
+        );
+        if (phoneTaken.rows.length > 0) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            ok: false,
+            error: "This phone number is already linked to another account."
+          });
+        }
+      }
+
       const randomPasswordHash = await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 12);
       const inserted = await client.query(
-        `INSERT INTO users (full_name, email, password_hash, account_status, created_at, updated_at)
-         VALUES ($1, $2, $3, 'ACTIVE', NOW(), NOW())
-         RETURNING id, full_name, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set`,
-        [String(fullName || "").trim() || "Nikofy User", cleanEmail, randomPasswordHash]
+        `INSERT INTO users (
+          full_name, username, email, phone, normalized_phone, password_hash, account_status, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', NOW(), NOW())
+        RETURNING id, full_name, username, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set`,
+        [
+          String(fullName || "").trim() || "Nikofy User",
+          cleanUsername,
+          cleanEmail,
+          cleanPhone,
+          canonicalPhone,
+          randomPasswordHash
+        ]
       );
       const createdUser = inserted.rows[0];
       await provisionUserDefaults(client, createdUser.id);
 
       userRes = await client.query(
-        `SELECT u.id, u.full_name, u.email, u.phone, u.account_status, u.freeze_reason,
+        `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.account_status, u.freeze_reason,
                 (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
                 k.tier AS kyc_tier, k.kyc_status
          FROM users u
@@ -379,6 +482,7 @@ app.post("/api/auth/otp/verify", async (req, res) => {
       user: {
         id: user.id,
         fullName: user.full_name,
+        username: user.username || null,
         email: user.email,
         phone: user.phone,
         accountStatus: user.account_status,
@@ -390,6 +494,9 @@ app.post("/api/auth/otp/verify", async (req, res) => {
     });
   } catch (err) {
     await client.query("ROLLBACK");
+    if (err.code === "23505") {
+      return res.status(409).json({ ok: false, error: formatConflictMessage(err) });
+    }
     console.error("OTP verify error:", err);
     return res.status(500).json({ ok: false, error: "Failed to verify code." });
   } finally {
@@ -398,15 +505,26 @@ app.post("/api/auth/otp/verify", async (req, res) => {
 });
 
 app.post("/api/auth/register", async (req, res) => {
-  const { fullName, email, phone, password, passcode } = req.body || {};
+  const { fullName, username, email, phone, password, passcode } = req.body || {};
 
   const cleanName = String(fullName || "").trim();
+  const cleanUsername = normalizeUsername(username);
   const cleanEmail = String(email || "").trim().toLowerCase();
   const cleanPhone = String(phone || "").trim();
+  const canonicalPhone = normalizePhone(cleanPhone);
   const rawPassword = String(password || "");
 
   if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     return res.status(400).json({ ok: false, error: "A valid email address is required." });
+  }
+  if (cleanUsername && !/^[a-z0-9_]{3,24}$/.test(cleanUsername)) {
+    return res.status(400).json({
+      ok: false,
+      error: "Username must be 3-24 characters using letters, numbers, or underscores."
+    });
+  }
+  if (cleanPhone && (!canonicalPhone || canonicalPhone.length < 7 || canonicalPhone.length > 15)) {
+    return res.status(400).json({ ok: false, error: "Please enter a valid phone number." });
   }
   if (rawPassword.length < 8) {
     return res.status(400).json({ ok: false, error: "Password must be at least 8 characters." });
@@ -420,13 +538,41 @@ app.post("/api/auth/register", async (req, res) => {
     await client.query("BEGIN");
     await ensureSchemaTables();
 
-    const existing = await client.query(
+    const existingEmail = await client.query(
       `SELECT id FROM users WHERE LOWER(email) = $1`,
       [cleanEmail]
     );
-    if (existing.rows.length > 0) {
+    if (existingEmail.rows.length > 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, error: "An account with this email already exists." });
+    }
+
+    if (cleanUsername) {
+      const existingUsername = await client.query(
+        `SELECT id FROM users WHERE LOWER(username) = $1`,
+        [cleanUsername]
+      );
+      if (existingUsername.rows.length > 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          ok: false,
+          error: "This username is already taken. Please choose another one."
+        });
+      }
+    }
+
+    if (canonicalPhone) {
+      const existingPhone = await client.query(
+        `SELECT id FROM users WHERE normalized_phone = $1`,
+        [canonicalPhone]
+      );
+      if (existingPhone.rows.length > 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          ok: false,
+          error: "This phone number is already linked to another account."
+        });
+      }
     }
 
     const passwordHash = await bcrypt.hash(rawPassword, 12);
@@ -434,11 +580,19 @@ app.post("/api/auth/register", async (req, res) => {
 
     const { rows } = await client.query(
       `INSERT INTO users (
-        full_name, email, phone, password_hash, transaction_passcode_hash, account_status, created_at, updated_at
+        full_name, username, email, phone, normalized_phone, password_hash, transaction_passcode_hash, account_status, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, 'ACTIVE', NOW(), NOW())
-      RETURNING id, full_name, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set, created_at`,
-      [cleanName || "Nikofy User", cleanEmail, cleanPhone || null, passwordHash, passcodeHash]
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'ACTIVE', NOW(), NOW())
+      RETURNING id, full_name, username, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set, created_at`,
+      [
+        cleanName || "Nikofy User",
+        cleanUsername,
+        cleanEmail,
+        cleanPhone || null,
+        canonicalPhone,
+        passwordHash,
+        passcodeHash
+      ]
     );
 
     const user = rows[0];
@@ -453,6 +607,7 @@ app.post("/api/auth/register", async (req, res) => {
       user: {
         id: user.id,
         fullName: user.full_name,
+        username: user.username || null,
         email: user.email,
         phone: user.phone,
         accountStatus: user.account_status,
@@ -464,7 +619,7 @@ app.post("/api/auth/register", async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     if (err.code === "23505") {
-      return res.status(409).json({ ok: false, error: "An account with this email already exists." });
+      return res.status(409).json({ ok: false, error: formatConflictMessage(err) });
     }
     console.error("Register error:", err);
     return res.status(500).json({ ok: false, error: err.message });
@@ -486,7 +641,7 @@ app.post("/api/auth/login", async (req, res) => {
     await ensureSchemaTables();
 
     const { rows } = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.password_hash, u.account_status, u.freeze_reason,
+      `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.password_hash, u.account_status, u.freeze_reason,
               (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
               k.tier AS kyc_tier, k.kyc_status
        FROM users u
@@ -516,6 +671,7 @@ app.post("/api/auth/login", async (req, res) => {
       user: {
         id: user.id,
         fullName: user.full_name,
+        username: user.username || null,
         email: user.email,
         phone: user.phone,
         accountStatus: user.account_status,
