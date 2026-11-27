@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
+  <!-- Paystack Inline Checkout -->
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+
   <!-- Tailwind CSS with class-based Dark Mode -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -364,7 +367,7 @@
           <div class="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
             <button type="button" onclick="openTransferTab('ngn-deposit')" class="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl bg-white dark:bg-nikofy-blue border border-slate-200 dark:border-nikofy-darkBorder hover:border-nikofy-green transition">
               <span class="text-xs font-extrabold text-nikofy-green dark:text-emerald-400">Deposit NGN</span>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400">₦30 Fee</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400">Paystack Instant</span>
             </button>
             <button type="button" onclick="openTradeTab('buy')" class="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl bg-white dark:bg-nikofy-blue border border-slate-200 dark:border-nikofy-darkBorder hover:border-nikofy-green transition">
               <span class="text-xs font-extrabold text-nikofy-green dark:text-emerald-400">Buy Crypto</span>
@@ -509,26 +512,26 @@
           <button id="subtab-withdraw" type="button" onclick="setTransferSubtab('withdraw')" class="py-2 rounded-xl text-xs font-extrabold text-slate-600 dark:text-slate-400">NGN Bank Out</button>
         </div>
 
-        <!-- 3A: NGN DEPOSIT (₦30 FLAT FEE) -->
+        <!-- 3A: NGN DEPOSIT (PAYSTACK LIVE CHECKOUT + BACKEND VERIFY) -->
         <div id="panel-ngn-deposit" class="max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
-            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Deposit NGN (Virtual Account)</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Flat <strong class="text-amber-600 dark:text-amber-400">₦30 fee</strong> applies and is itemized on your invoice.</p>
+            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Deposit NGN (Paystack Instant)</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Pay via <strong class="text-nikofy-green dark:text-emerald-400">Paystack</strong> (Card, Bank Transfer, or USSD) and verify directly into your Nikofy.ng NGN wallet.</p>
           </div>
 
           <div class="bg-white dark:bg-nikofy-darkBg border border-slate-200 dark:border-nikofy-darkBorder rounded-2xl p-4 text-xs space-y-1.5">
-            <div class="flex justify-between"><span class="text-slate-500 dark:text-slate-400">Bank Name</span><span class="font-bold text-slate-900 dark:text-white">Moniepoint MFB (Nikofy.ng)</span></div>
-            <div class="flex justify-between"><span class="text-slate-500 dark:text-slate-400">Account Number</span><span class="font-mono font-extrabold text-nikofy-green dark:text-emerald-400">8094127731</span></div>
-            <div class="flex justify-between"><span class="text-slate-500 dark:text-slate-400">Deposit Fee</span><span class="font-bold text-amber-600 dark:text-amber-400">₦30.00 Flat</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 dark:text-slate-400">Payment Gateway</span><span class="font-bold text-slate-900 dark:text-white">Paystack Inline (NGN)</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 dark:text-slate-400">Settlement</span><span class="font-mono font-extrabold text-nikofy-green dark:text-emerald-400">Instant Wallet Credit</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 dark:text-slate-400">Nikofy Deposit Fee</span><span class="font-bold text-emerald-600 dark:text-emerald-400">₦0.00</span></div>
           </div>
 
           <form onsubmit="simulateNgnDeposit(event)" class="space-y-3">
-            <label for="ngn-deposit-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Simulate Bank Transfer Amount (NGN)</label>
+            <label for="ngn-deposit-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Deposit Amount (NGN)</label>
             <input id="ngn-deposit-amount" type="number" min="100" step="100" value="50000" required
               class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-lg font-extrabold text-slate-900 dark:text-white tabular-nums outline-none" />
             <p class="text-[11px] text-slate-500 dark:text-slate-400">Note: On Tier 1, exceeding ₦1,000,000 balance automatically freezes the account until Tier 2 (NIN) upgrade.</p>
-            <button type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
-              Simulate NGN Deposit (-₦30 Fee)
+            <button id="btn-ngn-deposit-submit" type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
+              Pay with Paystack
             </button>
           </form>
         </div>
@@ -1010,6 +1013,7 @@
   <script>
     const STORAGE_KEY = 'nikofy_ng_state_v1';
     const API_BASE_URL = 'https://nikofy-ng-1.onrender.com';
+    const PAYSTACK_PUBLIC_KEY = 'pk_live_9ca1449cfb80135453090d6b0b41556c13777192';
 
     const MARKET_COINS = {
       BTC: { name: 'Bitcoin (BTC / NGN)', price: 81186785, change: '-2.70%', positive: false, points: [83500000, 83100000, 82600000, 82900000, 82000000, 81500000, 81186785] },
@@ -1101,12 +1105,12 @@
           {
             id: 'NIKO-90142',
             type: 'NGN_DEPOSIT',
-            title: 'NGN Bank Deposit',
-            subtitle: 'Gross ₦100,000.00 • Fee ₦30.00',
-            amountText: '+₦99,970.00',
+            title: 'NGN Wallet Deposit',
+            subtitle: 'Paystack Verified • Fee ₦0.00',
+            amountText: '+₦100,000.00',
             status: 'COMPLETED',
             timestamp: 'Today, 10:15 AM',
-            invoice: { Gross: '₦100,000.00', 'Nikofy.ng Fee': '₦30.00', 'Net Credited': '₦99,970.00' },
+            invoice: { 'Deposit Amount': '₦100,000.00', 'Nikofy.ng Fee': '₦0.00', 'Net Credited': '₦100,000.00' },
           },
           {
             id: 'NIKO-90138',
@@ -1239,7 +1243,7 @@
       pendingTransactionAction = { summaryText, onAuthorized };
       document.getElementById('verify-passcode-summary').textContent = summaryText
         ? `Authorize: ${summaryText}`
-        : 'Enter your 4-digit Nikofy.ng transaction passcode to complete this transaction.';
+        : 'Enter your 4-digit Nikofy.ng transaction passcode to proceed.';
       document.getElementById('verify-modal-passcode-input').value = '';
       document.getElementById('modal-verify-passcode').classList.remove('hidden');
       document.getElementById('verify-modal-passcode-input').focus();
@@ -1266,7 +1270,7 @@
         const nextAction = pendingTransactionAction;
         document.getElementById('verify-passcode-summary').textContent = nextAction.summaryText
           ? `Authorize: ${nextAction.summaryText}`
-          : 'Enter your 4-digit Nikofy.ng transaction passcode to complete this transaction.';
+          : 'Enter your 4-digit Nikofy.ng transaction passcode to proceed.';
         document.getElementById('verify-modal-passcode-input').value = '';
         document.getElementById('modal-verify-passcode').classList.remove('hidden');
         document.getElementById('verify-modal-passcode-input').focus();
@@ -1395,7 +1399,7 @@
       el.className = `pointer-events-auto border rounded-2xl px-4 py-3 text-xs font-semibold shadow-2xl ${colors[tone] || colors.info}`;
       el.textContent = msg;
       box.appendChild(el);
-      setTimeout(() => el.remove(), 3200);
+      setTimeout(() => el.remove(), 3500);
     }
 
     function formatNgn(v) {
@@ -1969,7 +1973,7 @@
     }
 
     // =====================================================================
-    // NGN DEPOSIT, EXTERNAL CRYPTO (NOWPAYMENTS), P2P @USERNAME, WITHDRAW
+    // NGN DEPOSIT (PAYSTACK), EXTERNAL CRYPTO, P2P @USERNAME, WITHDRAW
     // =====================================================================
     function openTransferTab(sub) { setTransferSubtab(sub); navigateTo('transfer'); }
 
@@ -2001,24 +2005,94 @@
       }
     }
 
+    function startLiveNgnDeposit(grossAmountNgn) {
+      const amountNgn = Number(grossAmountNgn || 0);
+      if (!Number.isFinite(amountNgn) || amountNgn < 100) {
+        showToast('Minimum NGN deposit is ₦100.', 'error');
+        return;
+      }
+      if (!appState.authToken) {
+        showToast('Please sign in with your 6-digit email OTP before depositing NGN.', 'error');
+        return;
+      }
+      if (typeof PaystackPop === 'undefined' || !PaystackPop.setup) {
+        showToast('Paystack checkout script failed to load. Check your connection.', 'error');
+        return;
+      }
+
+      const payerEmail = appState.user?.email || 'customer@nikofy.ng';
+      const reference = `NIKO_DEP_${Date.now()}_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      const btn = document.getElementById('btn-ngn-deposit-submit');
+
+      const handler = PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: payerEmail,
+        amount: Math.round(amountNgn * 100),
+        currency: 'NGN',
+        ref: reference,
+        metadata: {
+          custom_fields: [
+            {
+              display_name: 'Nikofy Username',
+              variable_name: 'nikofy_username',
+              value: appState.user?.username || 'nikofy_user',
+            },
+          ],
+        },
+        callback: function (response) {
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Verifying Paystack Payment...';
+          }
+          (async () => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/ngn/deposit/verify`, {
+                method: 'POST',
+                headers: getNikofyAuthHeaders(),
+                body: JSON.stringify({ reference: response.reference || reference }),
+              });
+              const data = await parseJsonSafe(res);
+              if (!res.ok || !data.ok) {
+                showToast(data.error || 'Paystack deposit verification failed.', 'error');
+                return;
+              }
+              await syncBackendWalletSnapshot();
+              recordAndOpenInvoice({
+                id: data.reference || response.reference || reference,
+                type: 'NGN_DEPOSIT',
+                title: 'NGN Wallet Deposit (Paystack)',
+                subtitle: `Ref ${data.reference || response.reference || reference}`,
+                amountText: `+${formatNgn(amountNgn)}`,
+                invoice: {
+                  'Paystack Ref': data.reference || response.reference || reference,
+                  'Amount Credited': formatNgn(amountNgn),
+                  'Nikofy Fee': '₦0.00',
+                },
+              });
+              showToast(`Deposited ${formatNgn(amountNgn)} to your NGN wallet!`, 'success');
+            } catch (err) {
+              showToast(err.message || 'Error verifying Paystack deposit.', 'error');
+            } finally {
+              if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Pay with Paystack';
+              }
+            }
+          })();
+        },
+        onClose: function () {
+          showToast('Paystack payment window closed.', 'info');
+        },
+      });
+
+      handler.openIframe();
+    }
+
     function simulateNgnDeposit(e) {
       e.preventDefault();
       const gross = Number(document.getElementById('ngn-deposit-amount').value || 0);
-      const fee = 30;
-      if (gross <= fee) return showToast('Amount must exceed ₦30 fee.', 'error');
-      const net = gross - fee;
-      authorizeTransactionWithPasscode(`Deposit ${formatNgn(gross)} (Net ${formatNgn(net)} after ₦30 fee)`, () => {
-        appState.balances.NGN += net;
-        checkTier1AutoFreeze();
-        recordAndOpenInvoice({
-          type: 'NGN_DEPOSIT',
-          title: 'NGN Bank Deposit',
-          subtitle: `Gross ${formatNgn(gross)} • Fee ₦30.00`,
-          amountText: `+${formatNgn(net)}`,
-          invoice: { 'Gross Deposit': formatNgn(gross), 'Nikofy.ng Deposit Fee': '₦30.00', 'Net Credited': formatNgn(net) }
-        });
-        if (appState.user.frozen) showToast('Tier 1 Balance Limit (₦1M) exceeded! Account frozen.', 'error');
-      });
+      if (!(gross >= 100)) return showToast('Minimum deposit is ₦100.', 'error');
+      startLiveNgnDeposit(gross);
     }
 
     function syncExtNetworkForAsset() {
@@ -2106,7 +2180,6 @@
         return;
       }
 
-      // SEND (External Crypto Withdrawal)
       if (appState.user.frozen) return showToast('Account Frozen: Upgrade to Tier 2 (NIN) first.', 'error');
       const destAddr = document.getElementById('ext-dest-address').value.trim();
       if (!destAddr || destAddr.length < 16) {
