@@ -380,7 +380,7 @@
             </button>
             <button type="button" onclick="openTransferTab('p2p')" class="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl bg-white dark:bg-nikofy-blue border border-slate-200 dark:border-nikofy-darkBorder hover:border-purple-500 transition">
               <span class="text-xs font-extrabold text-purple-600 dark:text-purple-300">P2P Send</span>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400">@username</span>
+              <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">100% Free</span>
             </button>
             <button type="button" onclick="navigateTo('bills')" class="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl bg-nikofy-green text-white hover:bg-nikofy-greenLight transition">
               <span class="text-xs font-extrabold">Bills &amp; Data</span>
@@ -537,7 +537,7 @@
         <div id="panel-ext-crypto" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
             <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">External Crypto Send &amp; Receive</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Flat service fee: <strong class="text-amber-600 dark:text-amber-400">$0.40</strong> below $1,000 or <strong class="text-amber-600 dark:text-amber-400">$0.80</strong> at $1,000+ (plus gas on external send).</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">External transfer fee: <strong class="text-amber-600 dark:text-amber-400">$0.40</strong> below $1,000 or <strong class="text-amber-600 dark:text-amber-400">$0.80</strong> at $1,000+ (plus gas on external send).</p>
           </div>
 
           <div class="grid grid-cols-3 gap-3">
@@ -603,17 +603,18 @@
           </div>
         </div>
 
-        <!-- 3C: INTERNAL P2P TRANSFER BY @USERNAME -->
+        <!-- 3C: INTERNAL P2P TRANSFER BY @USERNAME (100% FREE — ZERO FEE & ZERO GAS) -->
         <div id="panel-p2p" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
             <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Send by @username (P2P)</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Instant transfer to any Nikofy.ng user by their <strong class="text-purple-600 dark:text-purple-300">@username</strong> ($0.40 under $1,000 • $0.80 at $1,000+).</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Instant in-app transfer to any Nikofy.ng user by <strong class="text-purple-600 dark:text-purple-300">@username</strong> — <strong class="text-emerald-600 dark:text-emerald-400">100% Free ($0 Fee • $0 Gas • ₦0 Fee)</strong>.</p>
           </div>
           <form onsubmit="executeP2pTransfer(event)" class="space-y-4">
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label for="p2p-currency" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Asset</label>
-                <select id="p2p-currency" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none">
+                <label for="p2p-currency" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Asset (Naira &amp; Crypto)</label>
+                <select id="p2p-currency" onchange="updateP2pCurrencyLabels()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none">
+                  <option value="NGN">NGN — Naira (₦)</option>
                   <option value="USDT">USDT</option>
                   <option value="USDC">USDC</option>
                   <option value="BTC">BTC</option>
@@ -632,12 +633,15 @@
             </div>
             <p id="p2p-lookup-status" class="hidden text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-nikofy-darkBg border border-slate-200 dark:border-nikofy-darkBorder"></p>
             <div>
-              <label for="p2p-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Amount (USD Equivalent)</label>
-              <input id="p2p-amount" type="number" min="1" step="any" required placeholder="25"
+              <div class="flex items-center justify-between text-xs mb-1.5">
+                <label id="p2p-amount-label" for="p2p-amount" class="font-semibold text-slate-700 dark:text-slate-300">Amount (NGN)</label>
+                <span id="p2p-fee-badge" class="font-bold text-emerald-600 dark:text-emerald-400">Fee: ₦0.00 • Gas: ₦0.00 (Free)</span>
+              </div>
+              <input id="p2p-amount" type="number" min="1" step="any" required placeholder="5000"
                 class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-lg font-extrabold text-slate-900 dark:text-white tabular-nums outline-none" />
             </div>
             <button id="p2p-submit-btn" type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
-              Send to @username Now
+              Send Free to @username Now
             </button>
           </form>
         </div>
@@ -1825,6 +1829,7 @@
       selectMarketCoin(appState.ui.marketCoin || 'BTC', { skipChartFetch: true });
       updateTradeQuote();
       updateExtFeePreview();
+      updateP2pCurrencyLabels();
       renderLedgerViews();
     }
 
@@ -1977,6 +1982,23 @@
           : 'py-2 rounded-xl text-xs font-extrabold text-slate-600 dark:text-slate-400';
         document.getElementById(`panel-${k}`).classList.toggle('hidden', k !== sub);
       });
+      if (sub === 'p2p') updateP2pCurrencyLabels();
+    }
+
+    function updateP2pCurrencyLabels() {
+      const asset = document.getElementById('p2p-currency')?.value || 'NGN';
+      const labelEl = document.getElementById('p2p-amount-label');
+      const feeEl = document.getElementById('p2p-fee-badge');
+      const inputEl = document.getElementById('p2p-amount');
+      if (asset === 'NGN') {
+        if (labelEl) labelEl.textContent = 'Amount (NGN)';
+        if (feeEl) feeEl.textContent = 'Fee: ₦0.00 • Gas: ₦0.00 (100% Free)';
+        if (inputEl && !inputEl.value) inputEl.placeholder = '5000';
+      } else {
+        if (labelEl) labelEl.textContent = `Amount (${asset} • USD Equivalent)`;
+        if (feeEl) feeEl.textContent = 'Fee: $0.00 • Gas: $0.00 (100% Free)';
+        if (inputEl && !inputEl.value) inputEl.placeholder = '25';
+      }
     }
 
     function simulateNgnDeposit(e) {
@@ -2184,20 +2206,22 @@
       if (appState.user.frozen) return showToast('Account Frozen: Upgrade to Tier 2 (NIN) to unlock.', 'error');
       const asset = document.getElementById('p2p-currency').value;
       const rec = document.getElementById('p2p-recipient').value.trim().replace(/^@+/, '').toLowerCase();
-      const amtUsd = Number(document.getElementById('p2p-amount').value || 0);
-      const svcFee = calculateCryptoServiceFeeUsd(amtUsd);
-      const totalUsd = amtUsd + svcFee;
+      const amt = Number(document.getElementById('p2p-amount').value || 0);
 
       if (!rec) return showToast('Recipient @username is required.', 'error');
-      if (!(amtUsd > 0)) return showToast('Enter a valid amount.', 'error');
+      if (!(amt > 0)) return showToast('Enter a valid amount.', 'error');
 
-      const balKey = asset === 'USDC' ? 'USDT' : asset;
-      if (!appState.authToken && totalUsd > (appState.balances[balKey] || 0)) {
-        return showToast(`Insufficient ${balKey} balance (need $${totalUsd.toFixed(2)} incl. $${svcFee.toFixed(2)} fee).`, 'error');
+      const isNgn = asset === 'NGN';
+      const balKey = isNgn ? 'NGN' : (asset === 'USDC' ? 'USDT' : asset);
+      const formattedAmt = isNgn ? formatNgn(amt) : `$${amt.toFixed(2)} ${asset}`;
+      const formattedFee = isNgn ? '₦0.00 (Free)' : '$0.00 (Free)';
+
+      if (!appState.authToken && amt > (appState.balances[balKey] || 0)) {
+        return showToast(`Insufficient ${balKey} balance.`, 'error');
       }
 
       authorizeTransactionWithPasscode(
-        `P2P $${amtUsd.toFixed(2)} ${asset} to @${rec} (Fee $${svcFee.toFixed(2)})`,
+        `Free P2P Send ${formattedAmt} to @${rec} (Fee: ${formattedFee})`,
         async (verifiedPin) => {
           let refId = null;
 
@@ -2208,7 +2232,7 @@
               body: JSON.stringify({
                 recipientUsername: rec,
                 asset,
-                amountMinor: Math.round(amtUsd * 100),
+                amountMinor: Math.round(amt * 100),
                 passcode: verifiedPin,
               }),
             });
@@ -2220,20 +2244,21 @@
             refId = data.reference;
             await syncBackendWalletSnapshot();
           } else {
-            appState.balances[balKey] = Math.max(0, (appState.balances[balKey] || 0) - totalUsd);
+            appState.balances[balKey] = Math.max(0, (appState.balances[balKey] || 0) - amt);
           }
 
           recordAndOpenInvoice({
             ...(refId ? { id: refId } : {}),
             type: 'P2P_TRANSFER',
-            title: `P2P Send to @${rec}`,
-            subtitle: `Instant @username Transfer • Fee $${svcFee.toFixed(2)}`,
-            amountText: `-$${totalUsd.toFixed(2)}`,
+            title: `Free P2P Send to @${rec}`,
+            subtitle: `Instant @username Transfer • ${formattedFee}`,
+            amountText: `-${formattedAmt}`,
             invoice: {
               Recipient: `@${rec}`,
-              Amount: `$${amtUsd.toFixed(2)} ${asset}`,
-              'Service Fee': `$${svcFee.toFixed(2)}`,
-              'Total Debited': `$${totalUsd.toFixed(2)}`,
+              Asset: asset,
+              Amount: formattedAmt,
+              'P2P Fee & Gas': formattedFee,
+              'Total Debited': formattedAmt,
             },
           });
         }
@@ -2632,6 +2657,7 @@
       refreshCaptcha('signup');
       handleKycTierChange();
       handleExtDirectionChange();
+      updateP2pCurrencyLabels();
       setBillCategory(appState.ui.billCategory || 'DATA');
       setTradeSide(appState.ui.tradeSide || 'buy');
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
