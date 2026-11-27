@@ -30,6 +30,11 @@ const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@nikofy.ng";
 const OTP_EXPIRY_MINUTES = 10;
 const MAX_OTP_ATTEMPTS = 5;
 
+const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY || "";
+const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || "";
+const NOWPAYMENTS_BASE_URL = process.env.NOWPAYMENTS_BASE_URL || "https://api.nowpayments.io";
+const PUBLIC_API_BASE_URL = process.env.PUBLIC_API_BASE_URL || "https://nikofy-ng-1.onrender.com";
+
 if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
 } else {
@@ -42,6 +47,15 @@ const CRYPTO_LOW_TIER_FEE_CENTS = 40; // $0.40 service fee for transactions < $1
 const CRYPTO_HIGH_TIER_FEE_CENTS = 80; // $0.80 service fee for transactions >= $1,000.00
 const MAX_PASSCODE_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+
+const ASSET_NETWORK_MAP = {
+  NGN: { network: "NGN_INSTANT", minorUnit: "KOBO", npCurrency: null },
+  USDT: { network: "TRC20", minorUnit: "CENTS", npCurrency: "usdttrc20" },
+  USDC: { network: "ERC20", minorUnit: "CENTS", npCurrency: "usdcerc20" },
+  BTC: { network: "BITCOIN", minorUnit: "CENTS", npCurrency: "btc" },
+  ETH: { network: "ERC20", minorUnit: "CENTS", npCurrency: "eth" },
+  BNB: { network: "BEP20", minorUnit: "CENTS", npCurrency: "bnbbsc" }
+};
 
 function normalizeUsername(rawUsername) {
   if (rawUsername === undefined || rawUsername === null) return null;
@@ -80,6 +94,37 @@ function hashOtpCode(code) {
 
 function generateSixDigitOtp() {
   return String(crypto.randomInt(100000, 1000000));
+}
+
+function sortObjectKeys(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(sortObjectKeys);
+  }
+  if (obj && typeof obj === "object") {
+    return Object.keys(obj)
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = sortObjectKeys(obj[key]);
+        return acc;
+      }, {});
+  }
+  return obj;
+}
+
+function verifyNowPaymentsSignature(rawBodyObj, signatureHeader) {
+  if (!NOWPAYMENTS_IPN_SECRET) {
+    return true; // Allow local/testing webhook calls until IPN secret is set
+  }
+  if (!signatureHeader) return false;
+  const sortedJson = JSON.stringify(sortObjectKeys(rawBodyObj || {}));
+  const expected = crypto
+    .createHmac("sha512", NOWPAYMENTS_IPN_SECRET)
+    .update(sortedJson)
+    .digest("hex");
+  const sigBuf = Buffer.from(String(signatureHeader).trim(), "utf8");
+  const expBuf = Buffer.from(expected, "utf8");
+  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expBuf);
 }
 
 async function ensureOtpTable() {
@@ -175,6 +220,48 @@ async function ensureSchemaTables() {
       ngn_spent_kobo BIGINT NOT NULL DEFAULT 0,
       usd_spent_cents BIGINT NOT NULL DEFAULT 0,
       UNIQUE (user_id, spend_date)
+    );
+
+    CREATE TABLE IF NOT EXISTS p2p_transfers (
+      id SERIAL PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      sender_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      asset TEXT NOT NULL,
+      amount_minor BIGINT NOT NULL,
+      platform_fee_minor BIGINT NOT NULL DEFAULT 0,
+      note TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS crypto_deposits (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      asset TEXT NOT NULL,
+      network TEXT NOT NULL,
+      deposit_address TEXT NOT NULL,
+      provider_payment_id TEXT UNIQUE,
+      amount_minor BIGINT NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      credited BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS crypto_withdrawals (
+      id SERIAL PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      asset TEXT NOT NULL,
+      network TEXT NOT NULL,
+      destination_address TEXT NOT NULL,
+      amount_minor BIGINT NOT NULL,
+      platform_fee_minor BIGINT NOT NULL,
+      gas_fee_minor BIGINT NOT NULL DEFAULT 0,
+      total_debit_minor BIGINT NOT NULL,
+      provider_tx_id TEXT,
+      status TEXT NOT NULL DEFAULT 'PROCESSING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 }
@@ -327,6 +414,57 @@ async function loadUserWalletSnapshot(client, dbUserId) {
   };
 }
 
+async function verifyUserPasscodeTx(client, dbUserId, passcode) {
+  const { rows } = await client.query(
+    `SELECT id, transaction_passcode_hash, passcode_failed_attempts, passcode_locked_until, account_status
+     FROM users WHERE id = $1 FOR UPDATE`,
+    [dbUserId]
+  );
+  if (!rows.length) {
+    return { ok: false, status: 404, error: "User not found." };
+  }
+  const user = rows[0];
+  if (user.account_status !== "ACTIVE") {
+    return { ok: false, status: 403, error: `Account is ${user.account_status}.` };
+  }
+  if (!user.transaction_passcode_hash) {
+    return { ok: true, skipped: true };
+  }
+  if (!/^\d{4}$/.test(String(passcode || ""))) {
+    return { ok: false, status: 400, error: "4-digit transaction passcode is required." };
+  }
+  if (user.passcode_locked_until && new Date(user.passcode_locked_until) > new Date()) {
+    return {
+      ok: false,
+      status: 429,
+      error: "Passcode temporarily locked due to failed attempts."
+    };
+  }
+  const valid = verifyPasscode(String(passcode), user.transaction_passcode_hash);
+  if (!valid) {
+    const nextAttempts = (user.passcode_failed_attempts || 0) + 1;
+    const shouldLock = nextAttempts >= MAX_PASSCODE_ATTEMPTS;
+    const lockUntil = shouldLock
+      ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString()
+      : null;
+    await client.query(
+      `UPDATE users
+       SET passcode_failed_attempts = $1, passcode_locked_until = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [nextAttempts, lockUntil, dbUserId]
+    );
+    return { ok: false, status: 401, error: "Invalid 4-digit passcode." };
+  }
+
+  await client.query(
+    `UPDATE users
+     SET passcode_failed_attempts = 0, passcode_locked_until = NULL, updated_at = NOW()
+     WHERE id = $1`,
+    [dbUserId]
+  );
+  return { ok: true };
+}
+
 app.get("/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() AS now");
@@ -408,103 +546,201 @@ app.get("/api/wallets", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/wallets/credit", requireAuth, async (req, res) => {
-  const { asset = "NGN", network = null, amountMinor } = req.body || {};
+app.get("/api/users/lookup", requireAuth, async (req, res) => {
+  const cleanUsername = normalizeUsername(req.query.username);
+  if (!cleanUsername) {
+    return res.status(400).json({ ok: false, error: "username query parameter is required." });
+  }
+
+  try {
+    await ensureSchemaTables();
+    const { rows } = await pool.query(
+      `SELECT id, full_name, username, account_status
+       FROM users
+       WHERE LOWER(username) = $1`,
+      [cleanUsername]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: `No Nikofy user found with username @${cleanUsername}.` });
+    }
+    const target = rows[0];
+    return res.json({
+      ok: true,
+      recipient: {
+        id: target.id,
+        fullName: target.full_name,
+        username: target.username,
+        accountStatus: target.account_status
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
+  const { recipientUsername, asset = "USDT", amountMinor, passcode, note = null } = req.body || {};
+  const cleanRecipient = normalizeUsername(recipientUsername);
   const cleanAsset = String(asset || "").trim().toUpperCase();
   const amount = Number(amountMinor);
 
-  if (!cleanAsset || !Number.isInteger(amount) || amount <= 0) {
-    return res.status(400).json({ ok: false, error: "asset and positive integer amountMinor are required." });
+  if (!cleanRecipient) {
+    return res.status(400).json({ ok: false, error: "Recipient @username is required." });
   }
+  if (!ASSET_NETWORK_MAP[cleanAsset] || cleanAsset === "NGN") {
+    return res.status(400).json({ ok: false, error: "Unsupported P2P crypto asset." });
+  }
+  if (!Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ ok: false, error: "Positive integer amountMinor is required." });
+  }
+
+  const senderId = Number(req.auth.sub);
+  const fees = calculateFees({ channel: "CRYPTO", amountMinor: amount, gasFeeMinor: 0 });
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await ensureSchemaTables();
+    await provisionUserDefaults(client, senderId);
 
-    const dbUserId = Number(req.auth.sub);
-    await provisionUserDefaults(client, dbUserId);
-
-    const userRes = await client.query(
-      `SELECT id, account_status FROM users WHERE id = $1 FOR UPDATE`,
-      [dbUserId]
-    );
-    if (!userRes.rows.length) {
+    const pinCheck = await verifyUserPasscodeTx(client, senderId, passcode);
+    if (!pinCheck.ok) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ ok: false, error: "User not found." });
+      return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
     }
 
-    const walletQuery = network
-      ? `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
-         FROM wallets
-         WHERE user_id = $1 AND asset = $2 AND network = $3
-         FOR UPDATE`
-      : `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
-         FROM wallets
-         WHERE user_id = $1 AND asset = $2
-         ORDER BY id ASC
-         LIMIT 1
-         FOR UPDATE`;
-    const walletParams = network ? [dbUserId, cleanAsset, String(network).trim().toUpperCase()] : [dbUserId, cleanAsset];
-    const walletRes = await client.query(walletQuery, walletParams);
+    const recipientRes = await client.query(
+      `SELECT id, full_name, username, account_status
+       FROM users
+       WHERE LOWER(username) = $1
+       FOR UPDATE`,
+      [cleanRecipient]
+    );
+    if (!recipientRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: `Recipient @${cleanRecipient} not found.` });
+    }
 
-    if (!walletRes.rows.length) {
+    const recipient = recipientRes.rows[0];
+    if (Number(recipient.id) === senderId) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "You cannot send a P2P transfer to your own account." });
+    }
+    if (recipient.account_status !== "ACTIVE") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "Recipient account is not active." });
+    }
+
+    await provisionUserDefaults(client, recipient.id);
+
+    const senderKycRes = await client.query(
+      `SELECT tier, daily_usd_limit_cents FROM kyc_profiles WHERE user_id = $1`,
+      [senderId]
+    );
+    const senderKyc = senderKycRes.rows[0] || { tier: "TIER_1", daily_usd_limit_cents: 10000 };
+
+    const spendRes = await client.query(
+      `SELECT usd_spent_cents FROM daily_spend_tracker WHERE user_id = $1 AND spend_date = CURRENT_DATE FOR UPDATE`,
+      [senderId]
+    );
+    const spentUsd = Number(spendRes.rows[0]?.usd_spent_cents || 0);
+    if (spentUsd + amount > Number(senderKyc.daily_usd_limit_cents)) {
+      await client.query("ROLLBACK");
+      return res.status(422).json({
+        ok: false,
+        error: "Daily USD-equivalent limit exceeded for current KYC tier."
+      });
+    }
+
+    const senderWalletRes = await client.query(
+      `SELECT id, asset, network, minor_unit, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = $2
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [senderId, cleanAsset]
+    );
+    const recipientWalletRes = await client.query(
+      `SELECT id, asset, network, minor_unit, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = $2
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [recipient.id, cleanAsset]
+    );
+
+    if (!senderWalletRes.rows.length || !recipientWalletRes.rows.length) {
       await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, error: `Wallet for ${cleanAsset} not found.` });
     }
 
-    const wallet = walletRes.rows[0];
-    const nextBalance = Number(wallet.balance_minor) + amount;
-    const nextAvailable = Number(wallet.available_balance_minor) + amount;
+    const senderWallet = senderWalletRes.rows[0];
+    const recipientWallet = recipientWalletRes.rows[0];
 
-    await client.query(
-      `UPDATE wallets
-       SET balance_minor = $1, available_balance_minor = $2
-       WHERE id = $3`,
-      [nextBalance, nextAvailable, wallet.id]
-    );
-
-    const kycRes = await client.query(
-      `SELECT tier, max_ngn_balance_kobo, max_usd_balance_cents
-       FROM kyc_profiles WHERE user_id = $1`,
-      [dbUserId]
-    );
-    const kyc = kycRes.rows[0];
-
-    let frozen = false;
-    if (kyc && kyc.tier === "TIER_1") {
-      const exceedsNgn = cleanAsset === "NGN" && kyc.max_ngn_balance_kobo && nextBalance > Number(kyc.max_ngn_balance_kobo);
-      const exceedsUsd = cleanAsset !== "NGN" && kyc.max_usd_balance_cents && nextBalance > Number(kyc.max_usd_balance_cents);
-      if (exceedsNgn || exceedsUsd) {
-        frozen = true;
-        await client.query(
-          `UPDATE users
-           SET account_status = 'FROZEN',
-               freeze_reason = 'Tier 1 balance cap exceeded; Tier 2 KYC required.',
-               updated_at = NOW()
-           WHERE id = $1`,
-          [dbUserId]
-        );
-      }
+    if (Number(senderWallet.available_balance_minor) < fees.totalDebitMinor) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: `Insufficient ${cleanAsset} balance including $${(fees.platformFeeMinor / 100).toFixed(2)} service fee.`,
+        requiredMinor: fees.totalDebitMinor,
+        availableMinor: Number(senderWallet.available_balance_minor)
+      });
     }
 
-    const snapshot = await loadUserWalletSnapshot(client, dbUserId);
+    const nextSenderBalance = Number(senderWallet.balance_minor) - fees.totalDebitMinor;
+    const nextRecipientBalance = Number(recipientWallet.balance_minor) + amount;
+
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextSenderBalance, senderWallet.id]
+    );
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextRecipientBalance, recipientWallet.id]
+    );
+
+    await client.query(
+      `INSERT INTO daily_spend_tracker (user_id, spend_date, ngn_spent_kobo, usd_spent_cents)
+       VALUES ($1, CURRENT_DATE, 0, $2)
+       ON CONFLICT (user_id, spend_date) DO UPDATE SET
+         usd_spent_cents = daily_spend_tracker.usd_spent_cents + EXCLUDED.usd_spent_cents`,
+      [senderId, amount]
+    );
+
+    const recKycRes = await client.query(
+      `SELECT tier, max_usd_balance_cents FROM kyc_profiles WHERE user_id = $1`,
+      [recipient.id]
+    );
+    const recKyc = recKycRes.rows[0];
+    if (recKyc && recKyc.tier === "TIER_1" && recKyc.max_usd_balance_cents && nextRecipientBalance > Number(recKyc.max_usd_balance_cents)) {
+      await client.query(
+        `UPDATE users
+         SET account_status = 'FROZEN',
+             freeze_reason = 'Tier 1 balance cap exceeded; Tier 2 KYC required.',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [recipient.id]
+      );
+    }
+
+    const reference = `P2P_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    await client.query(
+      `INSERT INTO p2p_transfers (reference, sender_user_id, recipient_user_id, asset, amount_minor, platform_fee_minor, note)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [reference, senderId, recipient.id, cleanAsset, amount, fees.platformFeeMinor, note ? String(note).slice(0, 140) : null]
+    );
+
+    const snapshot = await loadUserWalletSnapshot(client, senderId);
     await client.query("COMMIT");
 
     return res.json({
       ok: true,
-      creditedMinor: amount,
-      wallet: {
-        id: wallet.id,
-        asset: wallet.asset,
-        network: wallet.network,
-        minorUnit: wallet.minor_unit,
-        balanceMinor: nextBalance,
-        availableBalanceMinor: nextAvailable
-      },
-      frozen,
-      accountStatus: snapshot.user?.account_status || "ACTIVE",
-      wallets: snapshot.wallets
+      reference,
+      recipientUsername: recipient.username,
+      recipientName: recipient.full_name,
+      asset: cleanAsset,
+      amountMinor: amount,
+      platformFeeMinor: fees.platformFeeMinor,
+      gasFeeMinor: 0,
+      totalDebitMinor: fees.totalDebitMinor,
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
     });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -514,72 +750,284 @@ app.post("/api/wallets/credit", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/wallets/debit", requireAuth, async (req, res) => {
-  const { asset = "NGN", network = null, amountMinor, gasFeeMinor = 0 } = req.body || {};
+app.post("/api/crypto/deposit-address", requireAuth, async (req, res) => {
+  const { asset = "USDT", amountUsd = 20 } = req.body || {};
   const cleanAsset = String(asset || "").trim().toUpperCase();
-  const amount = Number(amountMinor);
+  const cfg = ASSET_NETWORK_MAP[cleanAsset];
 
-  if (!cleanAsset || !Number.isInteger(amount) || amount <= 0) {
-    return res.status(400).json({ ok: false, error: "asset and positive integer amountMinor are required." });
+  if (!cfg || !cfg.npCurrency) {
+    return res.status(400).json({ ok: false, error: "Unsupported crypto asset for external deposit." });
   }
 
-  const channel = cleanAsset === "NGN" ? "NGN" : "CRYPTO";
-  const fees = calculateFees({ channel, amountMinor: amount, gasFeeMinor });
+  const userId = Number(req.auth.sub);
+  const priceAmount = Math.max(1, Number(amountUsd) || 20);
+
+  try {
+    await ensureSchemaTables();
+
+    let depositAddress = "";
+    let providerPaymentId = "";
+    let mode = "LIVE_PROVIDER";
+
+    if (NOWPAYMENTS_API_KEY) {
+      const orderId = `NIKOFY_DEP_${userId}_${cleanAsset}_${Date.now()}`;
+      const resp = await fetch(`${NOWPAYMENTS_BASE_URL}/v1/payment`, {
+        method: "POST",
+        headers: {
+          "x-api-key": NOWPAYMENTS_API_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          price_amount: priceAmount,
+          price_currency: "usd",
+          pay_currency: cfg.npCurrency,
+          order_id: orderId,
+          order_description: `Nikofy ${cleanAsset} (${cfg.network}) deposit for user ${userId}`,
+          ipn_callback_url: `${PUBLIC_API_BASE_URL}/api/webhooks/nowpayments`
+        })
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.pay_address) {
+        return res.status(502).json({
+          ok: false,
+          error: data.message || "Failed to generate external deposit address."
+        });
+      }
+      depositAddress = String(data.pay_address);
+      providerPaymentId = String(data.payment_id || orderId);
+    } else {
+      mode = "SANDBOX_FALLBACK";
+      const suffix = crypto.createHash("sha256").update(`${userId}:${cleanAsset}:${cfg.network}`).digest("hex").slice(0, 24);
+      depositAddress = cleanAsset === "BTC" ? `bc1q${suffix}` : `T${suffix.toUpperCase()}`;
+      providerPaymentId = `SIM_PAY_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
+    }
+
+    await pool.query(
+      `INSERT INTO crypto_deposits (
+        user_id, asset, network, deposit_address, provider_payment_id, amount_minor, status, credited
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'WAITING', FALSE)
+      ON CONFLICT (provider_payment_id) DO NOTHING`,
+      [userId, cleanAsset, cfg.network, depositAddress, providerPaymentId, Math.round(priceAmount * 100)]
+    );
+
+    return res.json({
+      ok: true,
+      mode,
+      asset: cleanAsset,
+      network: cfg.network,
+      depositAddress,
+      paymentId: providerPaymentId,
+      webhookUrl: `${PUBLIC_API_BASE_URL}/api/webhooks/nowpayments`
+    });
+  } catch (err) {
+    console.error("Deposit address error:", err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/webhooks/nowpayments", async (req, res) => {
+  const sig = req.headers["x-nowpayments-sig"];
+  if (!verifyNowPaymentsSignature(req.body, sig)) {
+    return res.status(401).json({ ok: false, error: "Invalid webhook signature." });
+  }
+
+  const payload = req.body || {};
+  const paymentId = String(payload.payment_id || payload.id || "").trim();
+  const paymentStatus = String(payload.payment_status || "").trim().toLowerCase();
+  const payCurrency = String(payload.pay_currency || "").trim().toLowerCase();
+  const amountUsd = Number(payload.price_amount ?? payload.actually_paid ?? 0);
+  const orderId = String(payload.order_id || "");
+
+  if (!paymentId) {
+    return res.status(400).json({ ok: false, error: "Missing payment_id." });
+  }
+
+  const isConfirmed = paymentStatus === "finished" || paymentStatus === "confirmed" || payload.forceCredit === true;
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await ensureSchemaTables();
 
-    const dbUserId = Number(req.auth.sub);
-    await provisionUserDefaults(client, dbUserId);
-
-    const userRes = await client.query(
-      `SELECT id, account_status FROM users WHERE id = $1 FOR UPDATE`,
-      [dbUserId]
+    const depRes = await client.query(
+      `SELECT id, user_id, asset, network, amount_minor, status, credited
+       FROM crypto_deposits
+       WHERE provider_payment_id = $1
+       FOR UPDATE`,
+      [paymentId]
     );
-    if (!userRes.rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ ok: false, error: "User not found." });
+
+    let depositRow = depRes.rows[0];
+    let targetUserId = depositRow?.user_id || null;
+
+    if (!targetUserId && orderId.startsWith("NIKOFY_DEP_")) {
+      const parts = orderId.split("_");
+      const parsedId = Number(parts[2]);
+      if (Number.isInteger(parsedId) && parsedId > 0) {
+        targetUserId = parsedId;
+      }
     }
-    if (userRes.rows[0].account_status !== "ACTIVE") {
+    if (!targetUserId && payload.userId) {
+      const parsedId = Number(payload.userId);
+      if (Number.isInteger(parsedId) && parsedId > 0) {
+        targetUserId = parsedId;
+      }
+    }
+
+    if (!targetUserId) {
       await client.query("ROLLBACK");
-      return res.status(403).json({
-        ok: false,
-        accountStatus: userRes.rows[0].account_status,
-        error: "Account is not active."
+      return res.status(404).json({ ok: false, error: "Unable to resolve user for deposit." });
+    }
+
+    const matchedAssetEntry = Object.entries(ASSET_NETWORK_MAP).find(
+      ([, v]) => v.npCurrency && v.npCurrency.toLowerCase() === payCurrency
+    );
+    const asset = depositRow?.asset || (matchedAssetEntry ? matchedAssetEntry[0] : "USDT");
+    const network = depositRow?.network || ASSET_NETWORK_MAP[asset]?.network || "TRC20";
+    const creditMinor =
+      amountUsd > 0 ? Math.round(amountUsd * 100) : Number(depositRow?.amount_minor || 0);
+
+    if (!depositRow) {
+      const insertedDep = await client.query(
+        `INSERT INTO crypto_deposits (
+          user_id, asset, network, deposit_address, provider_payment_id, amount_minor, status, credited
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)
+        RETURNING id, user_id, asset, network, amount_minor, status, credited`,
+        [
+          targetUserId,
+          asset,
+          network,
+          String(payload.pay_address || "EXTERNAL_DEPOSIT"),
+          paymentId,
+          creditMinor,
+          paymentStatus || "CONFIRMED"
+        ]
+      );
+      depositRow = insertedDep.rows[0];
+    }
+
+    if (depositRow.credited || !isConfirmed || creditMinor <= 0) {
+      await client.query(
+        `UPDATE crypto_deposits
+         SET status = $1, amount_minor = CASE WHEN $2 > 0 THEN $2 ELSE amount_minor END, updated_at = NOW()
+         WHERE id = $3`,
+        [paymentStatus || depositRow.status, creditMinor, depositRow.id]
+      );
+      await client.query("COMMIT");
+      return res.json({
+        ok: true,
+        alreadyCredited: Boolean(depositRow.credited),
+        status: paymentStatus || depositRow.status
       });
     }
 
-    const kycRes = await client.query(
-      `SELECT tier, daily_ngn_limit_kobo, daily_usd_limit_cents
-       FROM kyc_profiles WHERE user_id = $1`,
-      [dbUserId]
+    await provisionUserDefaults(client, targetUserId);
+    const walletRes = await client.query(
+      `SELECT id, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = $2
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [targetUserId, asset]
     );
-    const kyc = kycRes.rows[0] || {
-      tier: "TIER_1",
-      daily_ngn_limit_kobo: 20000000,
-      daily_usd_limit_cents: 10000
-    };
+    if (!walletRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "Target wallet not found." });
+    }
+
+    const wallet = walletRes.rows[0];
+    const nextBalance = Number(wallet.balance_minor) + creditMinor;
+    const nextAvailable = Number(wallet.available_balance_minor) + creditMinor;
+
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $2 WHERE id = $3`,
+      [nextBalance, nextAvailable, wallet.id]
+    );
+
+    const kycRes = await client.query(
+      `SELECT tier, max_usd_balance_cents FROM kyc_profiles WHERE user_id = $1`,
+      [targetUserId]
+    );
+    const kyc = kycRes.rows[0];
+    if (kyc && kyc.tier === "TIER_1" && kyc.max_usd_balance_cents && nextBalance > Number(kyc.max_usd_balance_cents)) {
+      await client.query(
+        `UPDATE users
+         SET account_status = 'FROZEN',
+             freeze_reason = 'Tier 1 balance cap exceeded; Tier 2 KYC required.',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [targetUserId]
+      );
+    }
+
+    await client.query(
+      `UPDATE crypto_deposits
+       SET status = $1, amount_minor = $2, credited = TRUE, updated_at = NOW()
+       WHERE id = $3`,
+      [paymentStatus || "FINISHED", creditMinor, depositRow.id]
+    );
+
+    await client.query("COMMIT");
+    return res.json({
+      ok: true,
+      creditedMinor: creditMinor,
+      asset,
+      paymentId
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("NOWPayments webhook error:", err);
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
+  const { asset = "USDT", destinationAddress, amountMinor, gasFeeMinor = 0, passcode } = req.body || {};
+  const cleanAsset = String(asset || "").trim().toUpperCase();
+  const cleanAddr = String(destinationAddress || "").trim();
+  const amount = Number(amountMinor);
+  const cfg = ASSET_NETWORK_MAP[cleanAsset];
+
+  if (!cfg || !cfg.npCurrency) {
+    return res.status(400).json({ ok: false, error: "Unsupported crypto asset for external withdrawal." });
+  }
+  if (!cleanAddr || cleanAddr.length < 16) {
+    return res.status(400).json({ ok: false, error: "A valid external wallet address is required." });
+  }
+  if (!Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ ok: false, error: "Positive integer amountMinor is required." });
+  }
+
+  const userId = Number(req.auth.sub);
+  const fees = calculateFees({ channel: "CRYPTO", amountMinor: amount, gasFeeMinor });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+    await provisionUserDefaults(client, userId);
+
+    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
+    if (!pinCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+    }
+
+    const kycRes = await client.query(
+      `SELECT tier, daily_usd_limit_cents FROM kyc_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    const kyc = kycRes.rows[0] || { tier: "TIER_1", daily_usd_limit_cents: 10000 };
 
     const spendRes = await client.query(
-      `SELECT ngn_spent_kobo, usd_spent_cents
-       FROM daily_spend_tracker
-       WHERE user_id = $1 AND spend_date = CURRENT_DATE
-       FOR UPDATE`,
-      [dbUserId]
+      `SELECT usd_spent_cents FROM daily_spend_tracker WHERE user_id = $1 AND spend_date = CURRENT_DATE FOR UPDATE`,
+      [userId]
     );
-    const spent = spendRes.rows[0] || { ngn_spent_kobo: 0, usd_spent_cents: 0 };
-
-    if (channel === "NGN") {
-      if (Number(spent.ngn_spent_kobo) + amount > Number(kyc.daily_ngn_limit_kobo)) {
-        await client.query("ROLLBACK");
-        return res.status(422).json({
-          ok: false,
-          error: "Daily NGN limit exceeded for current KYC tier."
-        });
-      }
-    } else if (Number(spent.usd_spent_cents) + amount > Number(kyc.daily_usd_limit_cents)) {
+    const spentUsd = Number(spendRes.rows[0]?.usd_spent_cents || 0);
+    if (spentUsd + amount > Number(kyc.daily_usd_limit_cents)) {
       await client.query("ROLLBACK");
       return res.status(422).json({
         ok: false,
@@ -587,20 +1035,12 @@ app.post("/api/wallets/debit", requireAuth, async (req, res) => {
       });
     }
 
-    const walletQuery = network
-      ? `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
-         FROM wallets
-         WHERE user_id = $1 AND asset = $2 AND network = $3
-         FOR UPDATE`
-      : `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
-         FROM wallets
-         WHERE user_id = $1 AND asset = $2
-         ORDER BY id ASC
-         LIMIT 1
-         FOR UPDATE`;
-    const walletParams = network ? [dbUserId, cleanAsset, String(network).trim().toUpperCase()] : [dbUserId, cleanAsset];
-    const walletRes = await client.query(walletQuery, walletParams);
-
+    const walletRes = await client.query(
+      `SELECT id, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = $2
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [userId, cleanAsset]
+    );
     if (!walletRes.rows.length) {
       await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, error: `Wallet for ${cleanAsset} not found.` });
@@ -611,50 +1051,89 @@ app.post("/api/wallets/debit", requireAuth, async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(400).json({
         ok: false,
-        error: `Insufficient ${cleanAsset} balance including service and gas fees.`,
+        error: "Insufficient crypto balance including service fee and network gas fee.",
         requiredMinor: fees.totalDebitMinor,
         availableMinor: Number(wallet.available_balance_minor)
       });
     }
 
     const nextBalance = Number(wallet.balance_minor) - fees.totalDebitMinor;
-    const nextAvailable = Number(wallet.available_balance_minor) - fees.totalDebitMinor;
-
     await client.query(
-      `UPDATE wallets
-       SET balance_minor = $1, available_balance_minor = $2
-       WHERE id = $3`,
-      [nextBalance, nextAvailable, wallet.id]
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextBalance, wallet.id]
     );
 
     await client.query(
       `INSERT INTO daily_spend_tracker (user_id, spend_date, ngn_spent_kobo, usd_spent_cents)
-       VALUES ($1, CURRENT_DATE, $2, $3)
+       VALUES ($1, CURRENT_DATE, 0, $2)
        ON CONFLICT (user_id, spend_date) DO UPDATE SET
-         ngn_spent_kobo = daily_spend_tracker.ngn_spent_kobo + EXCLUDED.ngn_spent_kobo,
          usd_spent_cents = daily_spend_tracker.usd_spent_cents + EXCLUDED.usd_spent_cents`,
+      [userId, amount]
+    );
+
+    let providerTxId = `SIM_WDR_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
+    let mode = "SIMULATED_PAYOUT";
+
+    if (NOWPAYMENTS_API_KEY && process.env.NOWPAYMENTS_JWT_TOKEN) {
+      const payoutResp = await fetch(`${NOWPAYMENTS_BASE_URL}/v1/payout`, {
+        method: "POST",
+        headers: {
+          "x-api-key": NOWPAYMENTS_API_KEY,
+          Authorization: `Bearer ${process.env.NOWPAYMENTS_JWT_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          withdrawals: [
+            {
+              address: cleanAddr,
+              currency: cfg.npCurrency,
+              amount: Number((amount / 100).toFixed(6)),
+              ipn_callback_url: `${PUBLIC_API_BASE_URL}/api/webhooks/nowpayments`
+            }
+          ]
+        })
+      });
+      const payoutData = await payoutResp.json().catch(() => ({}));
+      if (payoutResp.ok) {
+        mode = "LIVE_PAYOUT";
+        providerTxId = String(payoutData.id || payoutData.withdrawals?.[0]?.id || providerTxId);
+      }
+    }
+
+    const reference = `WDR_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    await client.query(
+      `INSERT INTO crypto_withdrawals (
+        reference, user_id, asset, network, destination_address, amount_minor,
+        platform_fee_minor, gas_fee_minor, total_debit_minor, provider_tx_id, status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PROCESSING')`,
       [
-        dbUserId,
-        channel === "NGN" ? amount : 0,
-        channel !== "NGN" ? amount : 0
+        reference,
+        userId,
+        cleanAsset,
+        cfg.network,
+        cleanAddr,
+        amount,
+        fees.platformFeeMinor,
+        fees.gasFeeMinor,
+        fees.totalDebitMinor,
+        providerTxId
       ]
     );
 
-    const snapshot = await loadUserWalletSnapshot(client, dbUserId);
+    const snapshot = await loadUserWalletSnapshot(client, userId);
     await client.query("COMMIT");
 
     return res.json({
       ok: true,
+      mode,
+      reference,
+      providerTxId,
+      asset: cleanAsset,
+      network: cfg.network,
+      destinationAddress: cleanAddr,
       amountMinor: amount,
       ...fees,
-      wallet: {
-        id: wallet.id,
-        asset: wallet.asset,
-        network: wallet.network,
-        minorUnit: wallet.minor_unit,
-        balanceMinor: nextBalance,
-        availableBalanceMinor: nextAvailable
-      },
       wallets: snapshot.wallets,
       dailySpend: snapshot.dailySpend
     });
