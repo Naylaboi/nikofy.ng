@@ -1236,18 +1236,33 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
   const {
     category = "DATA",
     providerCode,
+    provider,
+    biller,
     customerId,
+    phoneNumber,
+    meterNumber,
     amountKobo,
+    amountNaira,
+    amount: rawAmount,
     passcode,
     planLabel = null,
     variationCode = null
   } = req.body || {};
 
   const cleanCat = String(category || "DATA").trim().toUpperCase();
-  const cleanProv = String(providerCode || "").trim().toUpperCase();
-  const cleanCust = String(customerId || "").trim();
+  const rawProvider = String(providerCode || provider || biller || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+(AIRTIME|DATA|POWER|ELECTRICITY|CABLE|TV)$/i, "");
+  const cleanProv = rawProvider === "9MOBILE" || rawProvider === "ETISALAT" ? "9MOBILE" : rawProvider;
+  const cleanCust = String(customerId || phoneNumber || meterNumber || "").trim();
   const cleanPlanLabel = planLabel ? String(planLabel).trim().slice(0, 120) : null;
-  const amount = Number(amountKobo);
+
+  let amount = Number(amountKobo);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    const nairaVal = Number(amountNaira !== undefined ? amountNaira : rawAmount);
+    amount = Number.isFinite(nairaVal) && nairaVal > 0 ? Math.round(nairaVal * 100) : 0;
+  }
 
   if (!cleanProv || !cleanCust || !Number.isInteger(amount) || amount <= 0) {
     return res.status(400).json({ ok: false, error: "Provider, customer ID, and positive amountKobo are required." });
