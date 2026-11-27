@@ -1491,7 +1491,7 @@ app.get("/api/ledger", requireAuth, async (req, res) => {
         SELECT
           b.reference AS id,
           'BILL_PAYMENT' AS type,
-          CONCAT(b.provider_code, ' ', b.category, ' Paid') AS title,
+          COALESCE(b.plan_label, CONCAT(b.provider_code, ' ', b.category, ' Paid')) AS title,
           CASE WHEN b.token_code IS NOT NULL
             THEN CONCAT('Meter ', b.customer_id, ' • Token: ', b.token_code)
             ELSE CONCAT('ID: ', b.customer_id)
@@ -2274,12 +2274,14 @@ app.post("/api/auth/register", async (req, res) => {
 });
 
 app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body || {};
-  const cleanEmail = String(email || "").trim().toLowerCase();
+  const { email, identifier, password } = req.body || {};
+  const rawLoginId = String(email || identifier || "").trim();
+  const cleanEmail = rawLoginId.toLowerCase();
+  const canonicalPhone = normalizePhone(rawLoginId);
   const rawPassword = String(password || "");
 
-  if (!cleanEmail || !rawPassword) {
-    return res.status(400).json({ ok: false, error: "Email and password are required." });
+  if (!rawLoginId || !rawPassword) {
+    return res.status(400).json({ ok: false, error: "Email/phone and password are required." });
   }
 
   try {
@@ -2291,12 +2293,17 @@ app.post("/api/auth/login", async (req, res) => {
               k.tier AS kyc_tier, k.kyc_status
        FROM users u
        LEFT JOIN kyc_profiles k ON k.user_id = u.id
-       WHERE LOWER(u.email) = $1`,
-      [cleanEmail]
+       WHERE LOWER(u.email) = $1
+          OR ($2::text IS NOT NULL AND (
+            u.normalized_phone = $2
+            OR regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g') = $2
+          ))
+       LIMIT 1`,
+      [cleanEmail, canonicalPhone]
     );
 
     if (!rows.length) {
-      return res.status(401).json({ ok: false, error: "Invalid email or password." });
+      return res.status(401).json({ ok: false, error: "Invalid credentials." });
     }
 
     const user = rows[0];
@@ -2306,7 +2313,7 @@ app.post("/api/auth/login", async (req, res) => {
 
     const validPassword = await bcrypt.compare(rawPassword, user.password_hash);
     if (!validPassword) {
-      return res.status(401).json({ ok: false, error: "Invalid email or password." });
+      return res.status(401).json({ ok: false, error: "Invalid credentials." });
     }
 
     const token = signAuthToken(user);
