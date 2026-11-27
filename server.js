@@ -286,12 +286,15 @@ async function ensureSchemaTables() {
       category TEXT NOT NULL,
       provider_code TEXT NOT NULL,
       customer_id TEXT NOT NULL,
+      plan_label TEXT,
       amount_kobo BIGINT NOT NULL,
       token_code TEXT,
       provider_ref TEXT,
       status TEXT NOT NULL DEFAULT 'COMPLETED',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE bill_payments ADD COLUMN IF NOT EXISTS plan_label TEXT;
 
     CREATE TABLE IF NOT EXISTS ngn_deposits (
       id SERIAL PRIMARY KEY,
@@ -1095,14 +1098,18 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
 
 // LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT
 app.post("/api/bills/pay", requireAuth, async (req, res) => {
-  const { category = "DATA", providerCode, customerId, amountKobo, passcode } = req.body || {};
+  const { category = "DATA", providerCode, customerId, amountKobo, passcode, planLabel = null } = req.body || {};
   const cleanCat = String(category || "DATA").trim().toUpperCase();
   const cleanProv = String(providerCode || "").trim().toUpperCase();
   const cleanCust = String(customerId || "").trim();
+  const cleanPlanLabel = planLabel ? String(planLabel).trim().slice(0, 120) : null;
   const amount = Number(amountKobo);
 
   if (!cleanProv || !cleanCust || !Number.isInteger(amount) || amount <= 0) {
     return res.status(400).json({ ok: false, error: "Provider, customer ID, and positive amountKobo are required." });
+  }
+  if (["DATA", "AIRTIME"].includes(cleanCat) && !/^0[789][01]\d{8}$/.test(cleanCust)) {
+    return res.status(400).json({ ok: false, error: "Enter a valid 11-digit Nigerian mobile number." });
   }
 
   const userId = Number(req.auth.sub);
@@ -1117,6 +1124,22 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
     if (!pinCheck.ok) {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+    }
+
+    const kycRes = await client.query(
+      `SELECT daily_ngn_limit_kobo FROM kyc_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    const dailyLimit = Number(kycRes.rows[0]?.daily_ngn_limit_kobo || 20000000);
+
+    const spendRes = await client.query(
+      `SELECT ngn_spent_kobo FROM daily_spend_tracker WHERE user_id = $1 AND spend_date = CURRENT_DATE FOR UPDATE`,
+      [userId]
+    );
+    const spentNgn = Number(spendRes.rows[0]?.ngn_spent_kobo || 0);
+    if (spentNgn + amount > dailyLimit) {
+      await client.query("ROLLBACK");
+      return res.status(422).json({ ok: false, error: "Daily NGN limit exceeded for current KYC tier." });
     }
 
     const walletRes = await client.query(
@@ -1138,6 +1161,12 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
       : null;
 
     if (VTPASS_API_KEY && VTPASS_SECRET_KEY) {
+      const vtServiceMap = {
+        AIRTIME: { MTN: "mtn", AIRTEL: "airtel", GLO: "glo", "9MOBILE": "etisalat" },
+        DATA: { MTN: "mtn-data", AIRTEL: "airtel-data", GLO: "glo-data", "9MOBILE": "etisalat-data" },
+      };
+      const serviceID = vtServiceMap[cleanCat]?.[cleanProv] || cleanProv.toLowerCase();
+
       const vtResp = await fetch(`${VTPASS_BASE_URL}/pay`, {
         method: "POST",
         headers: {
@@ -1147,7 +1176,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
         },
         body: JSON.stringify({
           request_id: reference,
-          serviceID: cleanProv.toLowerCase(),
+          serviceID,
           billersCode: cleanCust,
           phone: cleanCust,
           amount: Math.round(amount / 100)
@@ -1179,10 +1208,10 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
 
     await client.query(
       `INSERT INTO bill_payments (
-        reference, user_id, category, provider_code, customer_id, amount_kobo, token_code, provider_ref, status
+        reference, user_id, category, provider_code, customer_id, plan_label, amount_kobo, token_code, provider_ref, status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED')`,
-      [reference, userId, cleanCat, cleanProv, cleanCust, amount, tokenCode, providerRef]
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'COMPLETED')`,
+      [reference, userId, cleanCat, cleanProv, cleanCust, cleanPlanLabel, amount, tokenCode, providerRef]
     );
 
     const snapshot = await loadUserWalletSnapshot(client, userId);
@@ -1193,6 +1222,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
       reference,
       providerRef,
       tokenCode,
+      planLabel: cleanPlanLabel,
       wallets: snapshot.wallets,
       dailySpend: snapshot.dailySpend
     });
