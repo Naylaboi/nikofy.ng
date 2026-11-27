@@ -37,7 +37,9 @@ if (SENDGRID_API_KEY) {
 }
 
 const NGN_FLAT_FEE_KOBO = 3000; // ₦30.00
-const CRYPTO_FEE_RATE = 0.018; // 1.8%
+const CRYPTO_HIGH_TIER_THRESHOLD_CENTS = 100000; // $1,000.00 and above
+const CRYPTO_LOW_TIER_FEE_CENTS = 40; // $0.40 service fee for transactions < $1,000.00
+const CRYPTO_HIGH_TIER_FEE_CENTS = 80; // $0.80 service fee for transactions >= $1,000.00
 const MAX_PASSCODE_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
@@ -212,7 +214,10 @@ function calculateFees({ channel, amountMinor, gasFeeMinor = 0 }) {
     };
   }
   if (channel === "CRYPTO") {
-    const platformFeeMinor = Math.round(amountMinor * CRYPTO_FEE_RATE);
+    const platformFeeMinor =
+      Number(amountMinor) >= CRYPTO_HIGH_TIER_THRESHOLD_CENTS
+        ? CRYPTO_HIGH_TIER_FEE_CENTS
+        : CRYPTO_LOW_TIER_FEE_CENTS;
     const gas = Math.max(0, Number(gasFeeMinor) || 0);
     return {
       platformFeeMinor,
