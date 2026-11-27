@@ -2408,18 +2408,70 @@
       const code = document.getElementById('bill-provider').value;
       const cust = document.getElementById('bill-customer-id').value.trim();
       const amt = Number(document.getElementById('bill-amount-ngn').value || 0);
+      if (!(amt > 0)) return showToast('Enter a valid bill amount.', 'error');
       if (amt > appState.balances.NGN) return showToast('Insufficient NGN balance.', 'error');
 
-      authorizeTransactionWithPasscode(`Pay ${formatNgn(amt)} for ${code} ${cat} (${cust})`, () => {
-        appState.balances.NGN -= amt;
-        const token = cat === 'ELECTRICITY' ? `${Math.floor(1000+Math.random()*9000)}-${Math.floor(1000+Math.random()*9000)}-${Math.floor(1000+Math.random()*9000)}` : null;
-        const inv = { Biller: code, 'Customer ID': cust, 'Amount Paid': formatNgn(amt) };
+      let planLabel = `${code} ${cat}`;
+      if (cat === 'DATA') {
+        const plans = DATA_PLANS[code] || DATA_PLANS.AIRTEL;
+        const idx = Number(document.getElementById('bill-data-plan').value || 0);
+        const selectedPlan = plans[idx] || plans[0];
+        if (selectedPlan && selectedPlan.label) {
+          planLabel = selectedPlan.label;
+        }
+      }
+
+      authorizeTransactionWithPasscode(`Pay ${formatNgn(amt)} for ${planLabel} (${cust})`, async (verifiedPin) => {
+        const amountKobo = Math.round(amt * 100);
+        let refId = null;
+        let serverToken = null;
+
+        if (appState.authToken) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/bills/pay`, {
+              method: 'POST',
+              headers: getNikofyAuthHeaders(),
+              body: JSON.stringify({
+                category: cat,
+                provider: code,
+                customerId: cust,
+                planLabel,
+                amountKobo,
+                passcode: verifiedPin,
+              }),
+            });
+            const data = await parseJsonSafe(res);
+            if (!res.ok || data.ok === false) {
+              showToast(data.error || data.message || 'Bill payment failed.', 'error');
+              return;
+            }
+            refId = data.reference || data.data?.reference || null;
+            serverToken = data.token || data.meterToken || data.data?.token || null;
+            await syncBackendWalletSnapshot();
+          } catch (err) {
+            showToast(err.message || 'Network error processing bill payment.', 'error');
+            return;
+          }
+        } else {
+          appState.balances.NGN = Math.max(0, appState.balances.NGN - amt);
+        }
+
+        const token = cat === 'ELECTRICITY'
+          ? (serverToken || `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`)
+          : serverToken;
+        const inv = {
+          Biller: code,
+          ...(cat === 'DATA' ? { 'Data Plan': planLabel } : { Category: cat }),
+          'Customer ID': cust,
+          'Amount Paid': formatNgn(amt),
+        };
         if (token) inv['Meter Token'] = token;
 
         recordAndOpenInvoice({
+          ...(refId ? { id: refId } : {}),
           type: 'BILL_PAYMENT',
-          title: `${code} ${cat} Paid`,
-          subtitle: token ? `Meter ${cust} • Token: ${token}` : `ID: ${cust}`,
+          title: cat === 'DATA' ? `${planLabel}` : `${code} ${cat} Paid`,
+          subtitle: token ? `Meter ${cust} • Token: ${token}` : `ID: ${cust} • ${planLabel}`,
           amountText: `-${formatNgn(amt)}`,
           invoice: inv,
         });
