@@ -36,9 +36,9 @@ const NOWPAYMENTS_BASE_URL = process.env.NOWPAYMENTS_BASE_URL || "https://api.no
 const PUBLIC_API_BASE_URL = process.env.PUBLIC_API_BASE_URL || "https://nikofy-ng-1.onrender.com";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
-const VTPASS_API_KEY = process.env.VTPASS_API_KEY || "";
-const VTPASS_SECRET_KEY = process.env.VTPASS_SECRET_KEY || "";
-const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL || "https://api-service.vtpass.com/api";
+const VTPASS_API_KEY = (process.env.VTPASS_API_KEY || "").trim();
+const VTPASS_SECRET_KEY = (process.env.VTPASS_SECRET_KEY || "").trim();
+const VTPASS_BASE_URL = (process.env.VTPASS_BASE_URL || "https://api-service.vtpass.com/api").trim().replace(/\/+$/, "");
 
 const VTPASS_SERVICE_MAP = {
   AIRTIME: {
@@ -1232,7 +1232,7 @@ app.get("/api/bills/variations", requireAuth, async (req, res) => {
   }
 });
 
-// LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT (VTPASS_API_KEY + optional VTPASS_SECRET_KEY)
+// LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT (VTPASS_API_KEY + VTPASS_SECRET_KEY)
 app.post("/api/bills/pay", requireAuth, async (req, res) => {
   const {
     category = "DATA",
@@ -1362,7 +1362,8 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(502).json({
         ok: false,
-        error: vtData.response_description || vtData.message || "Bill provider failed."
+        error: vtData.response_description || vtData.message || "Bill provider failed.",
+        vtpassCode: vtData.code || null
       });
     }
 
