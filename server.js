@@ -65,7 +65,7 @@ function normalizeUsername(rawUsername) {
 
 function normalizePhone(rawPhone) {
   if (rawPhone === undefined || rawPhone === null) return null;
-  const digits = String(rawPhone).replace(/[^\d+]/g, "").replace(/^\+/, "");
+  const digits = String(rawPhone).replace(/[^\d]/g, "");
   if (!digits) return null;
   if (digits.startsWith("234") && digits.length === 13) {
     return digits;
@@ -82,7 +82,7 @@ function formatConflictMessage(err) {
   if (constraint.includes("username") || detail.includes("username")) {
     return "This username is already taken. Please choose another one.";
   }
-  if (constraint.includes("phone") || detail.includes("phone")) {
+  if (constraint.includes("phone") || detail.includes("phone") || detail.includes("normalized_phone")) {
     return "This phone number is already linked to another account.";
   }
   return "An account with this email already exists.";
@@ -113,7 +113,7 @@ function sortObjectKeys(obj) {
 
 function verifyNowPaymentsSignature(rawBodyObj, signatureHeader) {
   if (!NOWPAYMENTS_IPN_SECRET) {
-    return true; // Allow local/testing webhook calls until IPN secret is set
+    return true;
   }
   if (!signatureHeader) return false;
   const sortedJson = JSON.stringify(sortObjectKeys(rawBodyObj || {}));
@@ -164,18 +164,6 @@ async function ensureSchemaTables() {
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS normalized_phone TEXT;
-
-    UPDATE users
-    SET normalized_phone = CASE
-      WHEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') ~ '^234[0-9]{10}$'
-        THEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')
-      WHEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') ~ '^0[0-9]{10}$'
-        THEN '234' || substr(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 2)
-      WHEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') <> ''
-        THEN regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')
-      ELSE NULL
-    END
-    WHERE phone IS NOT NULL AND normalized_phone IS NULL;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
       ON users (LOWER(email));
@@ -1306,7 +1294,9 @@ app.post("/api/auth/otp/verify", async (req, res) => {
 
       if (canonicalPhone) {
         const phoneTaken = await client.query(
-          `SELECT id FROM users WHERE normalized_phone = $1`,
+          `SELECT id FROM users
+           WHERE normalized_phone = $1
+              OR regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1`,
           [canonicalPhone]
         );
         if (phoneTaken.rows.length > 0) {
@@ -1404,8 +1394,8 @@ app.post("/api/auth/register", async (req, res) => {
   if (cleanPhone && (!canonicalPhone || canonicalPhone.length < 7 || canonicalPhone.length > 15)) {
     return res.status(400).json({ ok: false, error: "Please enter a valid phone number." });
   }
-  if (rawPassword.length < 8) {
-    return res.status(400).json({ ok: false, error: "Password must be at least 8 characters." });
+  if (rawPassword.length < 6) {
+    return res.status(400).json({ ok: false, error: "Password must be at least 6 characters." });
   }
   if (passcode && !/^\d{4}$/.test(String(passcode))) {
     return res.status(400).json({ ok: false, error: "Transaction passcode must be a 4-digit number." });
@@ -1441,7 +1431,9 @@ app.post("/api/auth/register", async (req, res) => {
 
     if (canonicalPhone) {
       const existingPhone = await client.query(
-        `SELECT id FROM users WHERE normalized_phone = $1`,
+        `SELECT id FROM users
+         WHERE normalized_phone = $1
+            OR regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1`,
         [canonicalPhone]
       );
       if (existingPhone.rows.length > 0) {
