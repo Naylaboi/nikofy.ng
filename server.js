@@ -205,6 +205,21 @@ function signAuthToken(userRow) {
   );
 }
 
+function requireAuth(req, res, next) {
+  const authHeader = String(req.headers.authorization || "");
+  if (!authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ ok: false, error: "Authorization token is required." });
+  }
+  const token = authHeader.slice(7).trim();
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.auth = payload;
+    next();
+  } catch (err) {
+    return res.status(401).json({ ok: false, error: "Invalid or expired session token." });
+  }
+}
+
 function calculateFees({ channel, amountMinor, gasFeeMinor = 0 }) {
   if (channel === "NGN") {
     return {
@@ -257,10 +272,59 @@ async function provisionUserDefaults(client, userId) {
         [userId, c.asset, c.network, c.minorUnit]
       );
     } catch (walletErr) {
-      // Fallback if wallets table has a slightly different column set
       console.warn(`Wallet seed warning for ${c.asset}:`, walletErr.message);
     }
   }
+}
+
+async function loadUserWalletSnapshot(client, dbUserId) {
+  await provisionUserDefaults(client, dbUserId);
+
+  const userRes = await client.query(
+    `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.account_status, u.freeze_reason,
+            (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+            k.tier AS kyc_tier, k.kyc_status,
+            k.daily_ngn_limit_kobo, k.max_ngn_balance_kobo,
+            k.daily_usd_limit_cents, k.max_usd_balance_cents
+     FROM users u
+     LEFT JOIN kyc_profiles k ON k.user_id = u.id
+     WHERE u.id = $1`,
+    [dbUserId]
+  );
+
+  const walletsRes = await client.query(
+    `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
+     FROM wallets
+     WHERE user_id = $1
+     ORDER BY id ASC`,
+    [dbUserId]
+  );
+
+  const spendRes = await client.query(
+    `SELECT ngn_spent_kobo, usd_spent_cents
+     FROM daily_spend_tracker
+     WHERE user_id = $1 AND spend_date = CURRENT_DATE`,
+    [dbUserId]
+  );
+
+  const spent = spendRes.rows[0] || { ngn_spent_kobo: 0, usd_spent_cents: 0 };
+
+  return {
+    user: userRes.rows[0] || null,
+    wallets: walletsRes.rows.map((w) => ({
+      id: w.id,
+      asset: w.asset,
+      currency: w.currency,
+      network: w.network,
+      minorUnit: w.minor_unit,
+      balanceMinor: Number(w.balance_minor),
+      availableBalanceMinor: Number(w.available_balance_minor)
+    })),
+    dailySpend: {
+      ngnSpentKobo: Number(spent.ngn_spent_kobo),
+      usdSpentCents: Number(spent.usd_spent_cents)
+    }
+  };
 }
 
 app.get("/health", async (req, res) => {
@@ -269,6 +333,336 @@ app.get("/health", async (req, res) => {
     res.json({ ok: true, service: "nikofy-backend", dbTime: result.rows[0].now });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get("/api/me", requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+    const snapshot = await loadUserWalletSnapshot(client, Number(req.auth.sub));
+    await client.query("COMMIT");
+
+    if (!snapshot.user) {
+      return res.status(404).json({ ok: false, error: "User not found." });
+    }
+
+    const u = snapshot.user;
+    return res.json({
+      ok: true,
+      user: {
+        id: u.id,
+        fullName: u.full_name,
+        username: u.username || null,
+        email: u.email,
+        phone: u.phone,
+        accountStatus: u.account_status,
+        freezeReason: u.freeze_reason || null,
+        passcodeSet: Boolean(u.passcode_set),
+        kycTier: u.kyc_tier || "TIER_1",
+        kycStatus: u.kyc_status || "UNVERIFIED",
+        limits: {
+          dailyNgnLimitKobo: Number(u.daily_ngn_limit_kobo || 20000000),
+          maxNgnBalanceKobo: u.max_ngn_balance_kobo !== null ? Number(u.max_ngn_balance_kobo) : null,
+          dailyUsdLimitCents: Number(u.daily_usd_limit_cents || 10000),
+          maxUsdBalanceCents: u.max_usd_balance_cents !== null ? Number(u.max_usd_balance_cents) : null
+        }
+      },
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/wallets", requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+    const snapshot = await loadUserWalletSnapshot(client, Number(req.auth.sub));
+    await client.query("COMMIT");
+
+    if (!snapshot.user) {
+      return res.status(404).json({ ok: false, error: "User not found." });
+    }
+
+    return res.json({
+      ok: true,
+      userId: snapshot.user.id,
+      accountStatus: snapshot.user.account_status,
+      freezeReason: snapshot.user.freeze_reason || null,
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/wallets/credit", requireAuth, async (req, res) => {
+  const { asset = "NGN", network = null, amountMinor } = req.body || {};
+  const cleanAsset = String(asset || "").trim().toUpperCase();
+  const amount = Number(amountMinor);
+
+  if (!cleanAsset || !Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ ok: false, error: "asset and positive integer amountMinor are required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+
+    const dbUserId = Number(req.auth.sub);
+    await provisionUserDefaults(client, dbUserId);
+
+    const userRes = await client.query(
+      `SELECT id, account_status FROM users WHERE id = $1 FOR UPDATE`,
+      [dbUserId]
+    );
+    if (!userRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "User not found." });
+    }
+
+    const walletQuery = network
+      ? `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
+         FROM wallets
+         WHERE user_id = $1 AND asset = $2 AND network = $3
+         FOR UPDATE`
+      : `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
+         FROM wallets
+         WHERE user_id = $1 AND asset = $2
+         ORDER BY id ASC
+         LIMIT 1
+         FOR UPDATE`;
+    const walletParams = network ? [dbUserId, cleanAsset, String(network).trim().toUpperCase()] : [dbUserId, cleanAsset];
+    const walletRes = await client.query(walletQuery, walletParams);
+
+    if (!walletRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: `Wallet for ${cleanAsset} not found.` });
+    }
+
+    const wallet = walletRes.rows[0];
+    const nextBalance = Number(wallet.balance_minor) + amount;
+    const nextAvailable = Number(wallet.available_balance_minor) + amount;
+
+    await client.query(
+      `UPDATE wallets
+       SET balance_minor = $1, available_balance_minor = $2
+       WHERE id = $3`,
+      [nextBalance, nextAvailable, wallet.id]
+    );
+
+    const kycRes = await client.query(
+      `SELECT tier, max_ngn_balance_kobo, max_usd_balance_cents
+       FROM kyc_profiles WHERE user_id = $1`,
+      [dbUserId]
+    );
+    const kyc = kycRes.rows[0];
+
+    let frozen = false;
+    if (kyc && kyc.tier === "TIER_1") {
+      const exceedsNgn = cleanAsset === "NGN" && kyc.max_ngn_balance_kobo && nextBalance > Number(kyc.max_ngn_balance_kobo);
+      const exceedsUsd = cleanAsset !== "NGN" && kyc.max_usd_balance_cents && nextBalance > Number(kyc.max_usd_balance_cents);
+      if (exceedsNgn || exceedsUsd) {
+        frozen = true;
+        await client.query(
+          `UPDATE users
+           SET account_status = 'FROZEN',
+               freeze_reason = 'Tier 1 balance cap exceeded; Tier 2 KYC required.',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [dbUserId]
+        );
+      }
+    }
+
+    const snapshot = await loadUserWalletSnapshot(client, dbUserId);
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      creditedMinor: amount,
+      wallet: {
+        id: wallet.id,
+        asset: wallet.asset,
+        network: wallet.network,
+        minorUnit: wallet.minor_unit,
+        balanceMinor: nextBalance,
+        availableBalanceMinor: nextAvailable
+      },
+      frozen,
+      accountStatus: snapshot.user?.account_status || "ACTIVE",
+      wallets: snapshot.wallets
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/wallets/debit", requireAuth, async (req, res) => {
+  const { asset = "NGN", network = null, amountMinor, gasFeeMinor = 0 } = req.body || {};
+  const cleanAsset = String(asset || "").trim().toUpperCase();
+  const amount = Number(amountMinor);
+
+  if (!cleanAsset || !Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ ok: false, error: "asset and positive integer amountMinor are required." });
+  }
+
+  const channel = cleanAsset === "NGN" ? "NGN" : "CRYPTO";
+  const fees = calculateFees({ channel, amountMinor: amount, gasFeeMinor });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+
+    const dbUserId = Number(req.auth.sub);
+    await provisionUserDefaults(client, dbUserId);
+
+    const userRes = await client.query(
+      `SELECT id, account_status FROM users WHERE id = $1 FOR UPDATE`,
+      [dbUserId]
+    );
+    if (!userRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "User not found." });
+    }
+    if (userRes.rows[0].account_status !== "ACTIVE") {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        ok: false,
+        accountStatus: userRes.rows[0].account_status,
+        error: "Account is not active."
+      });
+    }
+
+    const kycRes = await client.query(
+      `SELECT tier, daily_ngn_limit_kobo, daily_usd_limit_cents
+       FROM kyc_profiles WHERE user_id = $1`,
+      [dbUserId]
+    );
+    const kyc = kycRes.rows[0] || {
+      tier: "TIER_1",
+      daily_ngn_limit_kobo: 20000000,
+      daily_usd_limit_cents: 10000
+    };
+
+    const spendRes = await client.query(
+      `SELECT ngn_spent_kobo, usd_spent_cents
+       FROM daily_spend_tracker
+       WHERE user_id = $1 AND spend_date = CURRENT_DATE
+       FOR UPDATE`,
+      [dbUserId]
+    );
+    const spent = spendRes.rows[0] || { ngn_spent_kobo: 0, usd_spent_cents: 0 };
+
+    if (channel === "NGN") {
+      if (Number(spent.ngn_spent_kobo) + amount > Number(kyc.daily_ngn_limit_kobo)) {
+        await client.query("ROLLBACK");
+        return res.status(422).json({
+          ok: false,
+          error: "Daily NGN limit exceeded for current KYC tier."
+        });
+      }
+    } else if (Number(spent.usd_spent_cents) + amount > Number(kyc.daily_usd_limit_cents)) {
+      await client.query("ROLLBACK");
+      return res.status(422).json({
+        ok: false,
+        error: "Daily USD-equivalent limit exceeded for current KYC tier."
+      });
+    }
+
+    const walletQuery = network
+      ? `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
+         FROM wallets
+         WHERE user_id = $1 AND asset = $2 AND network = $3
+         FOR UPDATE`
+      : `SELECT id, asset, currency, network, minor_unit, balance_minor, available_balance_minor
+         FROM wallets
+         WHERE user_id = $1 AND asset = $2
+         ORDER BY id ASC
+         LIMIT 1
+         FOR UPDATE`;
+    const walletParams = network ? [dbUserId, cleanAsset, String(network).trim().toUpperCase()] : [dbUserId, cleanAsset];
+    const walletRes = await client.query(walletQuery, walletParams);
+
+    if (!walletRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: `Wallet for ${cleanAsset} not found.` });
+    }
+
+    const wallet = walletRes.rows[0];
+    if (Number(wallet.available_balance_minor) < fees.totalDebitMinor) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: `Insufficient ${cleanAsset} balance including service and gas fees.`,
+        requiredMinor: fees.totalDebitMinor,
+        availableMinor: Number(wallet.available_balance_minor)
+      });
+    }
+
+    const nextBalance = Number(wallet.balance_minor) - fees.totalDebitMinor;
+    const nextAvailable = Number(wallet.available_balance_minor) - fees.totalDebitMinor;
+
+    await client.query(
+      `UPDATE wallets
+       SET balance_minor = $1, available_balance_minor = $2
+       WHERE id = $3`,
+      [nextBalance, nextAvailable, wallet.id]
+    );
+
+    await client.query(
+      `INSERT INTO daily_spend_tracker (user_id, spend_date, ngn_spent_kobo, usd_spent_cents)
+       VALUES ($1, CURRENT_DATE, $2, $3)
+       ON CONFLICT (user_id, spend_date) DO UPDATE SET
+         ngn_spent_kobo = daily_spend_tracker.ngn_spent_kobo + EXCLUDED.ngn_spent_kobo,
+         usd_spent_cents = daily_spend_tracker.usd_spent_cents + EXCLUDED.usd_spent_cents`,
+      [
+        dbUserId,
+        channel === "NGN" ? amount : 0,
+        channel !== "NGN" ? amount : 0
+      ]
+    );
+
+    const snapshot = await loadUserWalletSnapshot(client, dbUserId);
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      amountMinor: amount,
+      ...fees,
+      wallet: {
+        id: wallet.id,
+        asset: wallet.asset,
+        network: wallet.network,
+        minorUnit: wallet.minor_unit,
+        balanceMinor: nextBalance,
+        availableBalanceMinor: nextAvailable
+      },
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
   }
 });
 
