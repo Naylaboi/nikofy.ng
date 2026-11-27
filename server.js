@@ -292,6 +292,15 @@ async function ensureSchemaTables() {
       status TEXT NOT NULL DEFAULT 'COMPLETED',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS ngn_deposits (
+      id SERIAL PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_kobo BIGINT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'VERIFIED',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 
@@ -807,6 +816,132 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
   }
 });
 
+// LIVE NGN DEPOSIT VERIFICATION VIA PAYSTACK
+app.post("/api/ngn/deposit/verify", requireAuth, async (req, res) => {
+  const { reference } = req.body || {};
+  const cleanRef = String(reference || "").trim();
+
+  if (!cleanRef) {
+    return res.status(400).json({ ok: false, error: "Paystack transaction reference is required." });
+  }
+  if (!PAYSTACK_SECRET_KEY) {
+    return res.status(500).json({ ok: false, error: "PAYSTACK_SECRET_KEY is not configured on the server." });
+  }
+
+  const userId = Number(req.auth.sub);
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    await ensureSchemaTables();
+    await provisionUserDefaults(client, userId);
+
+    const existing = await client.query(
+      `SELECT id, amount_kobo FROM ngn_deposits WHERE reference = $1`,
+      [cleanRef]
+    );
+    if (existing.rows.length > 0) {
+      const snapshot = await loadUserWalletSnapshot(client, userId);
+      await client.query("COMMIT");
+      return res.json({
+        ok: true,
+        alreadyCredited: true,
+        reference: cleanRef,
+        amountKobo: Number(existing.rows[0].amount_kobo),
+        wallets: snapshot.wallets,
+        dailySpend: snapshot.dailySpend
+      });
+    }
+
+    const verifyResp = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(cleanRef)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    const verifyData = await verifyResp.json().catch(() => ({}));
+
+    if (!verifyResp.ok || !verifyData.status || verifyData.data?.status !== "success") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: verifyData.message || "Paystack payment could not be verified as successful."
+      });
+    }
+
+    if (String(verifyData.data.currency || "").toUpperCase() !== "NGN") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "Only NGN deposits are accepted on this rail." });
+    }
+
+    const amountKobo = Number(verifyData.data.amount || 0);
+    if (!Number.isInteger(amountKobo) || amountKobo <= 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "Invalid deposit amount returned by Paystack." });
+    }
+
+    const walletRes = await client.query(
+      `SELECT id, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = 'NGN'
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [userId]
+    );
+    const wallet = walletRes.rows[0];
+    if (!wallet) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "NGN wallet not found." });
+    }
+
+    const nextBalance = Number(wallet.balance_minor) + amountKobo;
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextBalance, wallet.id]
+    );
+
+    const kycRes = await client.query(
+      `SELECT tier, max_ngn_balance_kobo FROM kyc_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    const kyc = kycRes.rows[0];
+    if (kyc && kyc.tier === "TIER_1" && kyc.max_ngn_balance_kobo && nextBalance > Number(kyc.max_ngn_balance_kobo)) {
+      await client.query(
+        `UPDATE users
+         SET account_status = 'FROZEN',
+             freeze_reason = 'Tier 1 NGN balance cap exceeded; Tier 2 KYC required.',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [userId]
+      );
+    }
+
+    await client.query(
+      `INSERT INTO ngn_deposits (reference, user_id, amount_kobo, status)
+       VALUES ($1, $2, $3, 'VERIFIED')`,
+      [cleanRef, userId, amountKobo]
+    );
+
+    const snapshot = await loadUserWalletSnapshot(client, userId);
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      reference: cleanRef,
+      amountKobo,
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // LIVE NGN BANK WITHDRAWAL (₦30 FLAT FEE + PAYSTACK TRANSFER WHEN CONFIGURED)
 app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
   const { bankName, accountNumber, amountKobo, passcode } = req.body || {};
@@ -1077,6 +1212,19 @@ app.get("/api/ledger", requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `
       SELECT * FROM (
+        SELECT
+          d.reference AS id,
+          'NGN_DEPOSIT' AS type,
+          'NGN Wallet Deposit (Paystack)' AS title,
+          CONCAT('Ref ', d.reference) AS subtitle,
+          CONCAT('+₦', TO_CHAR(d.amount_kobo / 100.0, 'FM999,999,990.00')) AS amount_text,
+          d.status,
+          d.created_at
+        FROM ngn_deposits d
+        WHERE d.user_id = $1
+
+        UNION ALL
+
         SELECT
           p.reference AS id,
           'P2P_TRANSFER' AS type,
