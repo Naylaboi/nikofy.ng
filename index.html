@@ -376,11 +376,11 @@
             </button>
             <button type="button" onclick="openTransferTab('ext-crypto')" class="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl bg-white dark:bg-nikofy-blue border border-slate-200 dark:border-nikofy-darkBorder hover:border-nikofy-blueAccent transition">
               <span class="text-xs font-extrabold text-nikofy-blueAccent dark:text-sky-400">External</span>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400">1.8% + Gas</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400">$0.40 / $0.80 + Gas</span>
             </button>
             <button type="button" onclick="openTransferTab('p2p')" class="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl bg-white dark:bg-nikofy-blue border border-slate-200 dark:border-nikofy-darkBorder hover:border-purple-500 transition">
               <span class="text-xs font-extrabold text-purple-600 dark:text-purple-300">P2P Send</span>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400">@User / NGN</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400">@username</span>
             </button>
             <button type="button" onclick="navigateTo('bills')" class="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl bg-nikofy-green text-white hover:bg-nikofy-greenLight transition">
               <span class="text-xs font-extrabold">Bills &amp; Data</span>
@@ -499,7 +499,7 @@
       </section>
 
       <!-- ================================================================= -->
-      <!-- TAB 3: NGN DEPOSIT, EXTERNAL CRYPTO (1.8% + GAS), P2P, WITHDRAW   -->
+      <!-- TAB 3: NGN DEPOSIT, EXTERNAL CRYPTO, P2P @USERNAME, WITHDRAW      -->
       <!-- ================================================================= -->
       <section id="view-transfer" class="app-view hidden space-y-5">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 dark:bg-nikofy-darkCard p-1.5 rounded-2xl border border-slate-200 dark:border-nikofy-darkBorder max-w-2xl mx-auto">
@@ -533,71 +533,111 @@
           </form>
         </div>
 
-        <!-- 3B: EXTERNAL CRYPTO RECEIVE / SEND (1.8% + GAS) -->
+        <!-- 3B: EXTERNAL CRYPTO RECEIVE / SEND ($0.40 / $0.80 SERVICE FEE + GAS) -->
         <div id="panel-ext-crypto" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
-            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">External Crypto (Binance / Bybit)</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">All external crypto transfers charge network gas + <strong class="text-amber-600 dark:text-amber-400">1.8% platform fee</strong> (itemized on invoice).</p>
+            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">External Crypto Send &amp; Receive</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Flat service fee: <strong class="text-amber-600 dark:text-amber-400">$0.40</strong> below $1,000 or <strong class="text-amber-600 dark:text-amber-400">$0.80</strong> at $1,000+ (plus gas on external send).</p>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <div>
-              <label for="ext-direction" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Direction</label>
-              <select id="ext-direction" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none">
-                <option value="RECEIVE">Receive (Deposit)</option>
+              <label for="ext-direction" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Action</label>
+              <select id="ext-direction" onchange="handleExtDirectionChange()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none">
+                <option value="RECEIVE">Receive (Address)</option>
                 <option value="SEND">Send (Withdraw)</option>
               </select>
             </div>
             <div>
+              <label for="ext-asset" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Coin</label>
+              <select id="ext-asset" onchange="syncExtNetworkForAsset()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none">
+                <option value="USDT">USDT</option>
+                <option value="USDC">USDC</option>
+                <option value="BTC">BTC</option>
+                <option value="ETH">ETH</option>
+                <option value="BNB">BNB</option>
+              </select>
+            </div>
+            <div>
               <label for="ext-network" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Network</label>
-              <select id="ext-network" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none">
-                <option value="TRC20">TRC20 (Gas: 1.00 USDT)</option>
-                <option value="BEP20">BEP20 (Gas: 0.50 USDT)</option>
-                <option value="ERC20">ERC20 (Gas: 4.50 USDT)</option>
+              <select id="ext-network" onchange="updateExtFeePreview()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 dark:text-white outline-none">
+                <option value="TRC20">TRC20</option>
+                <option value="ERC20">ERC20</option>
+                <option value="BEP20">BEP20</option>
+                <option value="BITCOIN">BITCOIN</option>
               </select>
             </div>
           </div>
 
           <form onsubmit="executeExternalCryptoTx(event)" class="space-y-3">
+            <div id="ext-dest-wrap" class="hidden">
+              <label for="ext-dest-address" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Destination Wallet Address</label>
+              <input id="ext-dest-address" type="text" placeholder="T... / 0x... / bc1q..."
+                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-2.5 text-sm font-mono text-slate-900 dark:text-white outline-none" />
+            </div>
+
             <div>
-              <label for="ext-usdt-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Amount (USDT)</label>
-              <input id="ext-usdt-amount" type="number" min="5" step="any" value="100" required
+              <label for="ext-usdt-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Amount (USD Equivalent)</label>
+              <input id="ext-usdt-amount" type="number" min="1" step="any" value="100" oninput="updateExtFeePreview()" required
                 class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-lg font-extrabold text-slate-900 dark:text-white tabular-nums outline-none" />
             </div>
-            <button type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-blueAccent hover:bg-blue-800 text-white font-extrabold text-sm transition">
-              Execute External Transfer &amp; View Invoice
+
+            <div id="ext-fee-preview" class="bg-white dark:bg-nikofy-darkBg border border-slate-200 dark:border-nikofy-darkBorder rounded-2xl p-3 text-xs flex items-center justify-between text-slate-600 dark:text-slate-300">
+              <span>Service Fee: <strong id="ext-service-fee-label" class="text-amber-600 dark:text-amber-400">$0.40</strong></span>
+              <span>Est. Gas: <strong id="ext-gas-fee-label" class="text-slate-900 dark:text-white">$0.00</strong></span>
+            </div>
+
+            <button id="ext-submit-btn" type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-blueAccent hover:bg-blue-800 text-white font-extrabold text-sm transition">
+              Generate External Deposit Address
             </button>
           </form>
+
+          <!-- Deposit Address Result Box -->
+          <div id="ext-deposit-result" class="hidden bg-white dark:bg-nikofy-darkBg border border-emerald-500/40 rounded-2xl p-4 space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <span id="ext-deposit-meta" class="font-bold text-nikofy-green dark:text-emerald-400 uppercase">USDT • TRC20</span>
+              <button type="button" onclick="copyDepositAddress()" class="px-2.5 py-1 rounded-lg bg-nikofy-green text-white text-[11px] font-bold">Copy Address</button>
+            </div>
+            <p id="ext-deposit-address" class="font-mono text-xs break-all text-slate-900 dark:text-white bg-slate-100 dark:bg-nikofy-darkCard p-2.5 rounded-xl border border-slate-200 dark:border-nikofy-darkBorder"></p>
+            <p id="ext-deposit-note" class="text-[11px] text-slate-500 dark:text-slate-400"></p>
+          </div>
         </div>
 
-        <!-- 3C: INTERNAL P2P TRANSFER -->
+        <!-- 3C: INTERNAL P2P TRANSFER BY @USERNAME -->
         <div id="panel-p2p" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
-            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Internal P2P Transfer</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Instant zero-fee transfer to another Nikofy.ng user.</p>
+            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Send by @username (P2P)</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Instant transfer to any Nikofy.ng user by their <strong class="text-purple-600 dark:text-purple-300">@username</strong> ($0.40 under $1,000 • $0.80 at $1,000+).</p>
           </div>
           <form onsubmit="executeP2pTransfer(event)" class="space-y-4">
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label for="p2p-currency" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Currency</label>
+                <label for="p2p-currency" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Asset</label>
                 <select id="p2p-currency" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none">
-                  <option value="NGN">NGN</option>
                   <option value="USDT">USDT</option>
+                  <option value="USDC">USDC</option>
+                  <option value="BTC">BTC</option>
+                  <option value="ETH">ETH</option>
+                  <option value="BNB">BNB</option>
                 </select>
               </div>
               <div>
-                <label for="p2p-recipient" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Recipient (@user)</label>
-                <input id="p2p-recipient" type="text" required placeholder="@adaeze_ng"
-                  class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm text-slate-900 dark:text-white outline-none" />
+                <label for="p2p-recipient" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Recipient @username</label>
+                <div class="flex gap-1.5">
+                  <input id="p2p-recipient" type="text" required placeholder="@adaeze_ng" oninput="clearP2pLookupBadge()"
+                    class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm text-slate-900 dark:text-white outline-none" />
+                  <button type="button" onclick="lookupP2pRecipient()" class="px-3 rounded-xl bg-slate-200 dark:bg-nikofy-blue text-slate-900 dark:text-white text-xs font-bold shrink-0">Find</button>
+                </div>
               </div>
             </div>
+            <p id="p2p-lookup-status" class="hidden text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-nikofy-darkBg border border-slate-200 dark:border-nikofy-darkBorder"></p>
             <div>
-              <label for="p2p-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Amount</label>
-              <input id="p2p-amount" type="number" min="1" step="any" required placeholder="10000"
+              <label for="p2p-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Amount (USD Equivalent)</label>
+              <input id="p2p-amount" type="number" min="1" step="any" required placeholder="25"
                 class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-lg font-extrabold text-slate-900 dark:text-white tabular-nums outline-none" />
             </div>
-            <button type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
-              Send P2P Now
+            <button id="p2p-submit-btn" type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
+              Send to @username Now
             </button>
           </form>
         </div>
@@ -1023,6 +1063,14 @@
       TIER_2: { name: 'Tier 2 (NIN)', ngnDaily: 2000000, usdDaily: 1000, maxNgn: Infinity, maxUsd: Infinity },
     };
 
+    const ASSET_DEFAULT_NETWORK = {
+      USDT: 'TRC20',
+      USDC: 'ERC20',
+      BTC: 'BITCOIN',
+      ETH: 'ERC20',
+      BNB: 'BEP20',
+    };
+
     function createDefaultState() {
       return {
         authenticated: false,
@@ -1060,11 +1108,11 @@
             id: 'NIKO-90138',
             type: 'EXTERNAL_CRYPTO',
             title: 'External USDT Deposit (TRC20)',
-            subtitle: 'From Binance • 1.8% Fee + 1.00 USDT Gas',
-            amountText: '+97.20 USDT',
+            subtitle: 'External Wallet • $0.40 Service Fee',
+            amountText: '+99.60 USDT',
             status: 'COMPLETED',
             timestamp: 'Yesterday, 04:40 PM',
-            invoice: { Gross: '100.00 USDT', 'Network Gas': '1.00 USDT', 'Nikofy.ng Fee (1.8%)': '1.80 USDT', 'Net Credited': '97.20 USDT' },
+            invoice: { Gross: '100.00 USDT', 'Service Fee': '$0.40', 'Net Credited': '99.60 USDT' },
           },
         ],
       };
@@ -1083,6 +1131,64 @@
       return headers;
     }
 
+    function calculateCryptoServiceFeeUsd(amountUsd) {
+      return Number(amountUsd) >= 1000 ? 0.80 : 0.40;
+    }
+
+    async function syncPasscodeToBackend(passcode) {
+      if (!appState.authToken || !appState.user?.id || !isValidFourDigitPasscode(passcode)) return;
+      try {
+        await fetch(`${API_BASE_URL}/api/security/passcode/set`, {
+          method: 'POST',
+          headers: getNikofyAuthHeaders(),
+          body: JSON.stringify({ userId: appState.user.id, passcode }),
+        });
+      } catch (err) {
+        console.warn('Passcode backend sync skipped:', err.message || err);
+      }
+    }
+
+    async function syncBackendWalletSnapshot() {
+      if (!appState.authToken) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/me`, {
+          method: 'GET',
+          headers: getNikofyAuthHeaders(),
+        });
+        const data = await parseJsonSafe(res);
+        if (!res.ok || !data.ok) return;
+
+        if (data.user) {
+          appState.user.id = data.user.id ?? appState.user.id;
+          appState.user.email = data.user.email || appState.user.email;
+          appState.user.phone = data.user.phone || appState.user.phone;
+          if (data.user.username) {
+            appState.user.username = data.user.username.startsWith('@')
+              ? data.user.username
+              : `@${data.user.username}`;
+          }
+          appState.user.frozen = data.user.accountStatus === 'FROZEN';
+          appState.user.kycTier = data.user.kycTier || appState.user.kycTier;
+        }
+
+        if (Array.isArray(data.wallets)) {
+          data.wallets.forEach((w) => {
+            const sym = String(w.asset || '').toUpperCase();
+            if (sym === 'NGN') {
+              appState.balances.NGN = Number(w.availableBalanceMinor ?? w.balanceMinor ?? 0) / 100;
+            } else if (['USDT', 'USDC', 'BTC', 'ETH', 'BNB'].includes(sym)) {
+              appState.balances[sym] = Number(w.availableBalanceMinor ?? w.balanceMinor ?? 0) / 100;
+            }
+          });
+        }
+
+        saveState();
+        syncAllUI();
+      } catch (err) {
+        console.warn('Wallet snapshot sync skipped:', err.message || err);
+      }
+    }
+
     function applyBackendAuthPayload(data, fallbackUser = null) {
       const token = data?.token || data?.accessToken || data?.data?.token || '';
       const backendUser = data?.user || data?.data?.user || null;
@@ -1091,15 +1197,21 @@
         appState.authToken = token;
       }
       if (backendUser && typeof backendUser === 'object') {
+        const rawHandle = backendUser.username || fallbackUser?.username || appState.user.username;
+        const formattedHandle = rawHandle
+          ? (String(rawHandle).startsWith('@') ? String(rawHandle) : `@${rawHandle}`)
+          : appState.user.username;
+
         appState.user = {
           ...appState.user,
           ...(fallbackUser || {}),
           id: backendUser.id || backendUser.userId || fallbackUser?.id || appState.user.id,
           email: backendUser.email || fallbackUser?.email || appState.user.email,
           phone: backendUser.phone || fallbackUser?.phone || appState.user.phone,
-          username: backendUser.username || fallbackUser?.username || appState.user.username,
+          username: formattedHandle,
           kycTier: backendUser.kycTier || backendUser.kyc_tier || appState.user.kycTier,
           kycStatus: backendUser.kycStatus || backendUser.kyc_status || appState.user.kycStatus,
+          frozen: backendUser.accountStatus === 'FROZEN' || Boolean(fallbackUser?.frozen),
         };
       } else if (fallbackUser) {
         appState.user = { ...appState.user, ...fallbackUser };
@@ -1129,7 +1241,7 @@
       document.getElementById('verify-modal-passcode-input').focus();
     }
 
-    function submitSetupPasscodeModal(e) {
+    async function submitSetupPasscodeModal(e) {
       e.preventDefault();
       const p1 = document.getElementById('setup-modal-passcode').value.trim();
       const p2 = document.getElementById('setup-modal-passcode-confirm').value.trim();
@@ -1141,6 +1253,7 @@
       }
       appState.user.transactionPasscode = p1;
       saveState();
+      await syncPasscodeToBackend(p1);
       syncAllUI();
       closeModal('modal-setup-passcode');
       showToast('Your 4-digit transaction passcode is now active.', 'success');
@@ -1156,7 +1269,7 @@
       }
     }
 
-    function submitVerifyPasscodeModal(e) {
+    async function submitVerifyPasscodeModal(e) {
       e.preventDefault();
       const entered = document.getElementById('verify-modal-passcode-input').value.trim();
       if (!isValidFourDigitPasscode(entered)) {
@@ -1166,11 +1279,24 @@
         document.getElementById('verify-modal-passcode-input').value = '';
         return showToast('Incorrect 4-digit transaction passcode.', 'error');
       }
+
+      if (appState.authToken && appState.user?.id) {
+        try {
+          const check = await verifyNikofyPasscode(appState.user.id, entered);
+          if (check && check.ok === false && !String(check.error || '').includes('404')) {
+            document.getElementById('verify-modal-passcode-input').value = '';
+            return showToast(check.error || 'Passcode rejected by server.', 'error');
+          }
+        } catch (err) {
+          // Allow local passcode if network hiccups
+        }
+      }
+
       const action = pendingTransactionAction;
       pendingTransactionAction = null;
       closeModal('modal-verify-passcode');
       if (action && typeof action.onAuthorized === 'function') {
-        action.onAuthorized();
+        await action.onAuthorized(entered);
       }
     }
 
@@ -1189,7 +1315,7 @@
       showToast('Transaction cancelled.', 'info');
     }
 
-    function handleSettingsPasscodeUpdate(e) {
+    async function handleSettingsPasscodeUpdate(e) {
       e.preventDefault();
       const hasExisting = isValidFourDigitPasscode(appState.user.transactionPasscode);
       const currentInput = document.getElementById('set-current-passcode').value.trim();
@@ -1208,6 +1334,7 @@
 
       appState.user.transactionPasscode = nextCode;
       saveState();
+      await syncPasscodeToBackend(nextCode);
       document.getElementById('set-current-passcode').value = '';
       document.getElementById('set-new-passcode').value = '';
       document.getElementById('set-confirm-passcode').value = '';
@@ -1311,11 +1438,11 @@
       return data;
     }
 
-    async function verifyEmailOtpRequest(email, purpose, code) {
+    async function verifyEmailOtpRequest(email, purpose, code, extra = {}) {
       const res = await fetch(`${API_BASE_URL}/api/auth/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, purpose, code }),
+        body: JSON.stringify({ email, purpose, code, ...extra }),
       });
       const data = await parseJsonSafe(res);
       if (!res.ok || data.ok === false) {
@@ -1375,7 +1502,7 @@
           }
         } catch (loginErr) {
           if ((id !== appState.user.email.toLowerCase() && id !== appState.user.phone.toLowerCase()) || pw !== appState.user.password) {
-            // Allow any valid email if testing OTP directly, otherwise check local fallback
+            // Allow any valid email if testing OTP directly
           }
         }
 
@@ -1438,7 +1565,7 @@
             body: JSON.stringify({
               phone,
               email,
-              username,
+              username: username.replace(/^@+/, ''),
               password,
             }),
           });
@@ -1515,6 +1642,7 @@
         appState.pendingOtp = null;
         saveState();
         enterDashboard();
+        await syncBackendWalletSnapshot();
         showToast('Email verified! Welcome back.', 'success');
       } catch (err) {
         showToast(err.message || 'Invalid or expired 6-digit OTP code.', 'error');
@@ -1538,16 +1666,22 @@
       verifyBtn.textContent = 'Verifying...';
 
       try {
+        const cand = appState.pendingOtp.candidateUser || {};
         const data = await verifyEmailOtpRequest(
           appState.pendingOtp.email,
           appState.pendingOtp.purpose || 'SIGNUP',
-          eCode
+          eCode,
+          {
+            username: cand.username ? String(cand.username).replace(/^@+/, '') : undefined,
+            phone: cand.phone || undefined,
+          }
         );
-        applyBackendAuthPayload(data, appState.pendingOtp.candidateUser);
+        applyBackendAuthPayload(data, cand);
         appState.authenticated = true;
         appState.pendingOtp = null;
         saveState();
         enterDashboard();
+        await syncBackendWalletSnapshot();
         showToast('Account verified! Welcome to Nikofy.ng!', 'success');
       } catch (err) {
         showToast(err.message || 'Invalid or expired 6-digit OTP code.', 'error');
@@ -1690,6 +1824,7 @@
 
       selectMarketCoin(appState.ui.marketCoin || 'BTC', { skipChartFetch: true });
       updateTradeQuote();
+      updateExtFeePreview();
       renderLedgerViews();
     }
 
@@ -1829,7 +1964,7 @@
     }
 
     // =====================================================================
-    // NGN DEPOSIT (₦30 FEE), EXTERNAL CRYPTO (1.8% + GAS), P2P, WITHDRAW
+    // NGN DEPOSIT, EXTERNAL CRYPTO (NOWPAYMENTS), P2P @USERNAME, WITHDRAW
     // =====================================================================
     function openTransferTab(sub) { setTransferSubtab(sub); navigateTo('transfer'); }
 
@@ -1864,62 +1999,245 @@
       });
     }
 
-    function executeExternalCryptoTx(e) {
-      e.preventDefault();
+    function syncExtNetworkForAsset() {
+      const asset = document.getElementById('ext-asset').value;
+      const netSel = document.getElementById('ext-network');
+      if (ASSET_DEFAULT_NETWORK[asset]) {
+        netSel.value = ASSET_DEFAULT_NETWORK[asset];
+      }
+      updateExtFeePreview();
+    }
+
+    function handleExtDirectionChange() {
+      const dir = document.getElementById('ext-direction').value;
+      const isSend = dir === 'SEND';
+      document.getElementById('ext-dest-wrap').classList.toggle('hidden', !isSend);
+      document.getElementById('ext-dest-address').required = isSend;
+      document.getElementById('ext-submit-btn').textContent = isSend
+        ? 'Send External Crypto & View Invoice'
+        : 'Generate External Deposit Address';
+      updateExtFeePreview();
+    }
+
+    function updateExtFeePreview() {
       const dir = document.getElementById('ext-direction').value;
       const net = document.getElementById('ext-network').value;
-      const amount = Number(document.getElementById('ext-usdt-amount').value || 0);
-      const gas = net === 'TRC20' ? 1.0 : net === 'BEP20' ? 0.5 : 4.5;
-      const fee18 = amount * 0.018;
+      const amt = Number(document.getElementById('ext-usdt-amount').value || 0);
+      const svcFee = calculateCryptoServiceFeeUsd(amt);
+      const gas = dir === 'SEND' ? (net === 'ERC20' ? 4.50 : net === 'BITCOIN' ? 2.50 : net === 'BEP20' ? 0.50 : 1.00) : 0;
+      document.getElementById('ext-service-fee-label').textContent = `$${svcFee.toFixed(2)}`;
+      document.getElementById('ext-gas-fee-label').textContent = `$${gas.toFixed(2)}`;
+    }
 
-      if (dir === 'SEND') {
-        if (appState.user.frozen) return showToast('Account Frozen: Upgrade to Tier 2 (NIN) first.', 'error');
-        const total = amount + gas + fee18;
-        if (total > appState.balances.USDT) return showToast(`Insufficient USDT (need ${total.toFixed(2)} USDT incl. gas + 1.8% fee).`, 'error');
-        authorizeTransactionWithPasscode(`Send ${amount.toFixed(2)} USDT (${net}) • Total ${total.toFixed(2)} USDT`, () => {
-          appState.balances.USDT -= total;
-          recordAndOpenInvoice({
-            type: 'EXTERNAL_CRYPTO',
-            title: `External USDT Send (${net})`,
-            subtitle: `To External Wallet • 1.8% Fee + Gas`,
-            amountText: `-${total.toFixed(2)} USDT`,
-            invoice: { 'Amount Sent': `${amount.toFixed(2)} USDT`, 'Network Gas Fee': `${gas.toFixed(2)} USDT`, 'Nikofy.ng Fee (1.8%)': `${fee18.toFixed(2)} USDT`, 'Total Debited': `${total.toFixed(2)} USDT` }
+    async function copyDepositAddress() {
+      const addr = document.getElementById('ext-deposit-address').textContent.trim();
+      if (!addr) return;
+      try {
+        await navigator.clipboard.writeText(addr);
+        showToast('Deposit address copied to clipboard.', 'success');
+      } catch {
+        showToast('Address ready to copy.', 'info');
+      }
+    }
+
+    async function executeExternalCryptoTx(e) {
+      e.preventDefault();
+      const dir = document.getElementById('ext-direction').value;
+      const asset = document.getElementById('ext-asset').value;
+      const net = document.getElementById('ext-network').value;
+      const amountUsd = Number(document.getElementById('ext-usdt-amount').value || 0);
+      const svcFee = calculateCryptoServiceFeeUsd(amountUsd);
+
+      if (dir === 'RECEIVE') {
+        const btn = document.getElementById('ext-submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Generating Address...';
+
+        try {
+          if (!appState.authToken) {
+            throw new Error('Sign in with your 6-digit email OTP first to generate a backend deposit address.');
+          }
+          const res = await fetch(`${API_BASE_URL}/api/crypto/deposit-address`, {
+            method: 'POST',
+            headers: getNikofyAuthHeaders(),
+            body: JSON.stringify({ asset, amountUsd }),
           });
-        });
-      } else {
-        const netCredited = Math.max(0, amount - gas - fee18);
-        authorizeTransactionWithPasscode(`Claim External USDT Deposit (${amount.toFixed(2)} USDT on ${net})`, () => {
-          appState.balances.USDT += netCredited;
-          checkTier1AutoFreeze();
+          const data = await parseJsonSafe(res);
+          if (!res.ok || !data.ok) {
+            throw new Error(data.error || 'Could not generate deposit address.');
+          }
+
+          document.getElementById('ext-deposit-meta').textContent = `${data.asset || asset} • ${data.network || net}`;
+          document.getElementById('ext-deposit-address').textContent = data.depositAddress;
+          document.getElementById('ext-deposit-note').textContent =
+            data.mode === 'SANDBOX_FALLBACK'
+              ? 'Sandbox address generated. Add NOWPAYMENTS_API_KEY & NOWPAYMENTS_IPN_SECRET on Render for live blockchain addresses.'
+              : 'Send only on the selected network. Confirmed deposits auto-credit your Nikofy wallet via webhook.';
+          document.getElementById('ext-deposit-result').classList.remove('hidden');
+          showToast(`${asset} (${net}) deposit address ready.`, 'success');
+        } catch (err) {
+          showToast(err.message || 'Deposit address error.', 'error');
+        } finally {
+          btn.disabled = false;
+          handleExtDirectionChange();
+        }
+        return;
+      }
+
+      // SEND (External Crypto Withdrawal)
+      if (appState.user.frozen) return showToast('Account Frozen: Upgrade to Tier 2 (NIN) first.', 'error');
+      const destAddr = document.getElementById('ext-dest-address').value.trim();
+      if (!destAddr || destAddr.length < 16) {
+        return showToast('Enter a valid external destination wallet address.', 'error');
+      }
+
+      const gasUsd = net === 'ERC20' ? 4.50 : net === 'BITCOIN' ? 2.50 : net === 'BEP20' ? 0.50 : 1.00;
+      const totalUsd = amountUsd + svcFee + gasUsd;
+      const balKey = asset === 'USDC' ? 'USDT' : asset;
+      if (totalUsd > (appState.balances[balKey] || 0)) {
+        return showToast(`Insufficient ${balKey} balance (need $${totalUsd.toFixed(2)} incl. $${svcFee.toFixed(2)} fee + gas).`, 'error');
+      }
+
+      authorizeTransactionWithPasscode(
+        `Send $${amountUsd.toFixed(2)} ${asset} (${net}) • Fee $${svcFee.toFixed(2)} + Gas $${gasUsd.toFixed(2)}`,
+        async (verifiedPin) => {
+          const amountMinor = Math.round(amountUsd * 100);
+          const gasFeeMinor = Math.round(gasUsd * 100);
+          let refId = null;
+
+          if (appState.authToken) {
+            const res = await fetch(`${API_BASE_URL}/api/crypto/withdraw`, {
+              method: 'POST',
+              headers: getNikofyAuthHeaders(),
+              body: JSON.stringify({
+                asset,
+                destinationAddress: destAddr,
+                amountMinor,
+                gasFeeMinor,
+                passcode: verifiedPin,
+              }),
+            });
+            const data = await parseJsonSafe(res);
+            if (!res.ok || !data.ok) {
+              showToast(data.error || 'External withdrawal failed.', 'error');
+              return;
+            }
+            refId = data.reference;
+            await syncBackendWalletSnapshot();
+          } else {
+            appState.balances[balKey] = Math.max(0, (appState.balances[balKey] || 0) - totalUsd);
+          }
+
           recordAndOpenInvoice({
+            ...(refId ? { id: refId } : {}),
             type: 'EXTERNAL_CRYPTO',
-            title: `External USDT Deposit (${net})`,
-            subtitle: `From Binance/Bybit • 1.8% Fee + Gas`,
-            amountText: `+${netCredited.toFixed(2)} USDT`,
-            invoice: { 'Gross Received': `${amount.toFixed(2)} USDT`, 'Network Gas Fee': `${gas.toFixed(2)} USDT`, 'Nikofy.ng Fee (1.8%)': `${fee18.toFixed(2)} USDT`, 'Net Credited': `${netCredited.toFixed(2)} USDT` }
+            title: `External ${asset} Send (${net})`,
+            subtitle: `To ${destAddr.slice(0, 8)}...${destAddr.slice(-6)}`,
+            amountText: `-$${totalUsd.toFixed(2)}`,
+            invoice: {
+              'Amount Sent': `$${amountUsd.toFixed(2)}`,
+              'Service Fee': `$${svcFee.toFixed(2)}`,
+              'Network Gas': `$${gasUsd.toFixed(2)}`,
+              'Total Debited': `$${totalUsd.toFixed(2)}`,
+            },
           });
-          if (appState.user.frozen) showToast('Tier 1 USD Balance Limit ($5,000) exceeded! Account frozen.', 'error');
+        }
+      );
+    }
+
+    function clearP2pLookupBadge() {
+      const el = document.getElementById('p2p-lookup-status');
+      if (el) el.classList.add('hidden');
+    }
+
+    async function lookupP2pRecipient() {
+      const raw = document.getElementById('p2p-recipient').value.trim().replace(/^@+/, '').toLowerCase();
+      const el = document.getElementById('p2p-lookup-status');
+      if (!raw) return showToast('Enter a recipient @username first.', 'error');
+      if (!appState.authToken) {
+        return showToast('Sign in with your 6-digit email OTP to look up Nikofy @usernames.', 'info');
+      }
+      el.classList.remove('hidden');
+      el.textContent = `Looking up @${raw}...`;
+      el.className = 'text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-nikofy-darkBg border border-slate-200 dark:border-nikofy-darkBorder text-slate-600 dark:text-slate-300';
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/users/lookup?username=${encodeURIComponent(raw)}`, {
+          method: 'GET',
+          headers: getNikofyAuthHeaders(),
         });
+        const data = await parseJsonSafe(res);
+        if (!res.ok || !data.ok) {
+          el.textContent = data.error || `User @${raw} not found.`;
+          el.className = 'text-xs font-semibold px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400';
+          return;
+        }
+        el.textContent = `Verified Recipient: ${data.recipient.fullName} (@${data.recipient.username})`;
+        el.className = 'text-xs font-bold px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400';
+      } catch (err) {
+        el.textContent = 'Lookup failed. Check connection.';
       }
     }
 
     function executeP2pTransfer(e) {
       e.preventDefault();
       if (appState.user.frozen) return showToast('Account Frozen: Upgrade to Tier 2 (NIN) to unlock.', 'error');
-      const cur = document.getElementById('p2p-currency').value;
-      const rec = document.getElementById('p2p-recipient').value.trim();
-      const amt = Number(document.getElementById('p2p-amount').value || 0);
-      if (amt > appState.balances[cur]) return showToast(`Insufficient ${cur} balance.`, 'error');
-      authorizeTransactionWithPasscode(`P2P ${cur === 'NGN' ? formatNgn(amt) : amt + ' ' + cur} to ${rec}`, () => {
-        appState.balances[cur] -= amt;
-        recordAndOpenInvoice({
-          type: 'P2P_TRANSFER',
-          title: `P2P Send to ${rec}`,
-          subtitle: 'Instant Internal Transfer • ₦0 Fee',
-          amountText: `-${cur === 'NGN' ? formatNgn(amt) : amt + ' ' + cur}`,
-          invoice: { Recipient: rec, Amount: cur === 'NGN' ? formatNgn(amt) : `${amt} ${cur}`, 'Internal Fee': 'FREE' }
-        });
-      });
+      const asset = document.getElementById('p2p-currency').value;
+      const rec = document.getElementById('p2p-recipient').value.trim().replace(/^@+/, '').toLowerCase();
+      const amtUsd = Number(document.getElementById('p2p-amount').value || 0);
+      const svcFee = calculateCryptoServiceFeeUsd(amtUsd);
+      const totalUsd = amtUsd + svcFee;
+
+      if (!rec) return showToast('Recipient @username is required.', 'error');
+      if (!(amtUsd > 0)) return showToast('Enter a valid amount.', 'error');
+
+      const balKey = asset === 'USDC' ? 'USDT' : asset;
+      if (!appState.authToken && totalUsd > (appState.balances[balKey] || 0)) {
+        return showToast(`Insufficient ${balKey} balance (need $${totalUsd.toFixed(2)} incl. $${svcFee.toFixed(2)} fee).`, 'error');
+      }
+
+      authorizeTransactionWithPasscode(
+        `P2P $${amtUsd.toFixed(2)} ${asset} to @${rec} (Fee $${svcFee.toFixed(2)})`,
+        async (verifiedPin) => {
+          let refId = null;
+
+          if (appState.authToken) {
+            const res = await fetch(`${API_BASE_URL}/api/transfers/p2p`, {
+              method: 'POST',
+              headers: getNikofyAuthHeaders(),
+              body: JSON.stringify({
+                recipientUsername: rec,
+                asset,
+                amountMinor: Math.round(amtUsd * 100),
+                passcode: verifiedPin,
+              }),
+            });
+            const data = await parseJsonSafe(res);
+            if (!res.ok || !data.ok) {
+              showToast(data.error || 'P2P transfer failed.', 'error');
+              return;
+            }
+            refId = data.reference;
+            await syncBackendWalletSnapshot();
+          } else {
+            appState.balances[balKey] = Math.max(0, (appState.balances[balKey] || 0) - totalUsd);
+          }
+
+          recordAndOpenInvoice({
+            ...(refId ? { id: refId } : {}),
+            type: 'P2P_TRANSFER',
+            title: `P2P Send to @${rec}`,
+            subtitle: `Instant @username Transfer • Fee $${svcFee.toFixed(2)}`,
+            amountText: `-$${totalUsd.toFixed(2)}`,
+            invoice: {
+              Recipient: `@${rec}`,
+              Amount: `$${amtUsd.toFixed(2)} ${asset}`,
+              'Service Fee': `$${svcFee.toFixed(2)}`,
+              'Total Debited': `$${totalUsd.toFixed(2)}`,
+            },
+          });
+        }
+      );
     }
 
     function executeBankWithdrawal(e) {
@@ -2015,7 +2333,7 @@
     // =====================================================================
     function recordAndOpenInvoice(item) {
       const tx = {
-        id: 'NIKO-' + Math.floor(10000 + Math.random() * 90000),
+        id: item.id || ('NIKO-' + Math.floor(10000 + Math.random() * 90000)),
         ...item,
         status: 'COMPLETED',
         timestamp: 'Just now',
@@ -2308,36 +2626,19 @@
       return parseJsonSafe(res);
     }
 
-    async function evaluateNikofyTransfer({
-      userId,
-      channel,
-      amountMinor,
-      gasFeeMinor = 0,
-      projectedBalanceAfterMinor = null
-    }) {
-      const res = await fetch(`${API_BASE_URL}/api/transactions/evaluate`, {
-        method: 'POST',
-        headers: getNikofyAuthHeaders(),
-        body: JSON.stringify({
-          userId,
-          channel,
-          amountMinor,
-          gasFeeMinor,
-          projectedBalanceAfterMinor
-        })
-      });
-      return parseJsonSafe(res);
-    }
-
     window.addEventListener('DOMContentLoaded', () => {
       applyTheme();
       refreshCaptcha('signin');
       refreshCaptcha('signup');
       handleKycTierChange();
+      handleExtDirectionChange();
       setBillCategory(appState.ui.billCategory || 'DATA');
       setTradeSide(appState.ui.tradeSide || 'buy');
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
-      if (appState.authenticated) enterDashboard();
+      if (appState.authenticated) {
+        enterDashboard();
+        syncBackendWalletSnapshot();
+      }
 
       const initialCoin = appState.ui.marketCoin || 'BTC';
       fetchLiveMarketPrices();
