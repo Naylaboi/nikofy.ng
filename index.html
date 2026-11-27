@@ -283,25 +283,37 @@
           </div>
         </div>
 
-        <!-- Desktop Navigation -->
+        <!-- Desktop Navigation (with small icons on top of labels) -->
         <nav class="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-nikofy-darkCard p-1 rounded-2xl border border-slate-200 dark:border-nikofy-darkBorder">
-          <button type="button" data-nav="home" onclick="navigateTo('home')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-nikofy-green text-white">Home</button>
-          <button type="button" data-nav="trade" onclick="navigateTo('trade')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400">Buy/Sell</button>
-          <button type="button" data-nav="transfer" onclick="navigateTo('transfer')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400">Send/Receive</button>
-          <button type="button" data-nav="bills" onclick="navigateTo('bills')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400">Bills &amp; Data</button>
-          <button type="button" data-nav="ledger" onclick="navigateTo('ledger')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400">Ledger</button>
-          <button type="button" data-nav="settings" onclick="navigateTo('settings')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400">Settings</button>
+          <button type="button" data-nav="home" onclick="navigateTo('home')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-nikofy-green text-white flex flex-col items-center gap-0.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+            <span>Home</span>
+          </button>
+          <button type="button" data-nav="trade" onclick="navigateTo('trade')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 flex flex-col items-center gap-0.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16V4m0 0L3 8m4-4l4 4"/><path d="M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+            <span>Buy/Sell</span>
+          </button>
+          <button type="button" data-nav="transfer" onclick="navigateTo('transfer')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 flex flex-col items-center gap-0.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            <span>Send/Receive</span>
+          </button>
+          <button type="button" data-nav="bills" onclick="navigateTo('bills')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 flex flex-col items-center gap-0.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span>Bills &amp; Data</span>
+          </button>
+          <button type="button" data-nav="ledger" onclick="navigateTo('ledger')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 flex flex-col items-center gap-0.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>
+            <span>Ledger</span>
+          </button>
+          <button type="button" data-nav="settings" onclick="navigateTo('settings')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 flex flex-col items-center gap-0.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Settings</span>
+          </button>
         </nav>
 
         <div class="flex items-center gap-2 shrink-0">
           <button type="button" onclick="toggleTheme()" class="text-xs font-bold px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder text-slate-700 dark:text-slate-200 transition">
             <span class="theme-label">Light</span>
-          </button>
-          <button type="button" onclick="openKycModal()" class="text-xs font-bold px-3 py-2 rounded-xl bg-nikofy-blueAccent text-white transition">
-            KYC
-          </button>
-          <button type="button" onclick="signOutUser()" class="text-xs font-semibold px-3 py-2 rounded-xl bg-slate-100 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder text-slate-700 dark:text-slate-300 hover:text-rose-500 transition">
-            Sign Out
           </button>
         </div>
       </div>
@@ -649,36 +661,67 @@
           </form>
         </div>
 
-        <!-- 3D: NGN BANK WITHDRAWAL (₦30 FLAT FEE) -->
+        <!-- 3D: NGN BANK WITHDRAWAL (ALL NIGERIAN COMMERCIAL & MFB BANKS + SEARCH + ACCOUNT NAME VERIFY) -->
         <div id="panel-withdraw" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
-          <div>
-            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Withdraw to Nigerian Bank</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Flat <strong class="text-amber-600 dark:text-amber-400">₦30 fee</strong> per withdrawal (itemized on invoice).</p>
-          </div>
-          <form onsubmit="executeBankWithdrawal(event)" class="space-y-4">
+          <div class="flex items-start justify-between gap-2">
             <div>
-              <label for="withdraw-bank" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Bank</label>
-              <select id="withdraw-bank" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none">
-                <option value="GTBank">GTBank</option>
-                <option value="Access Bank">Access Bank</option>
-                <option value="Zenith Bank">Zenith Bank</option>
-                <option value="Kuda Bank">Kuda Bank</option>
-                <option value="OPay">OPay</option>
+              <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Withdraw to Nigerian Bank</h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Search commercial or microfinance banks, verify account name, then enter amount (<strong class="text-amber-600 dark:text-amber-400">₦30 flat fee</strong>).</p>
+            </div>
+            <span id="bank-count-badge" class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-nikofy-green/15 text-nikofy-green dark:text-emerald-400 border border-nikofy-green/30 shrink-0 tabular-nums">Loading banks...</span>
+          </div>
+
+          <form onsubmit="executeBankWithdrawal(event)" class="space-y-4">
+            <!-- Step 1: Search & Choose Bank -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <label for="withdraw-bank-search" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">1. Search Bank (Commercial or Microfinance / MFB)</label>
+                <button type="button" onclick="clearBankSearch()" class="text-[11px] font-bold text-nikofy-green dark:text-emerald-400 hover:underline">Reset Filter</button>
+              </div>
+              <div class="relative">
+                <input id="withdraw-bank-search" type="search" oninput="filterWithdrawalBanks()" placeholder="Type bank name e.g. OPay, Kuda, Moniepoint, GTBank, LAPO..."
+                  class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder-slate-400 outline-none" />
+              </div>
+              <select id="withdraw-bank" onchange="onWithdrawalBankOrAccountChange()" required
+                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none">
               </select>
             </div>
-            <div>
-              <label for="withdraw-acct-num" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">10-Digit NUBAN Account</label>
-              <input id="withdraw-acct-num" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required placeholder="0123456789"
-                class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white tabular-nums outline-none" />
+
+            <!-- Step 2: 10-Digit Account Number + Live Name Verification -->
+            <div class="space-y-2">
+              <label for="withdraw-acct-num" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">2. Enter 10-Digit Account Number to Verify Name</label>
+              <div class="flex gap-2">
+                <input id="withdraw-acct-num" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required placeholder="0123456789"
+                  oninput="handleAccountNumberInput()"
+                  class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-sm font-extrabold tracking-wider text-slate-900 dark:text-white tabular-nums outline-none" />
+                <button id="btn-verify-acct-name" type="button" onclick="resolveWithdrawalAccountName(true)"
+                  class="px-3.5 rounded-xl bg-nikofy-blueAccent hover:bg-blue-800 text-white text-xs font-extrabold shrink-0 transition">
+                  Verify Name
+                </button>
+              </div>
+
+              <!-- Verified Account Name Box -->
+              <div id="withdraw-acct-verify-box" class="hidden rounded-2xl p-3 text-xs border transition">
+                <div class="flex items-center justify-between gap-2">
+                  <span id="withdraw-acct-verify-label" class="font-bold uppercase tracking-wide text-[10px]">Account Name</span>
+                  <span id="withdraw-acct-verify-badge" class="text-[10px] font-extrabold px-2 py-0.5 rounded-full">PENDING</span>
+                </div>
+                <p id="withdraw-acct-resolved-name" class="text-sm font-extrabold mt-1"></p>
+                <p id="withdraw-acct-verify-note" class="text-[11px] mt-0.5 opacity-85"></p>
+              </div>
             </div>
+
+            <!-- Step 3: Amount & Submit (Enabled once Account Name is Verified) -->
             <div>
-              <label for="withdraw-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Amount (NGN)</label>
+              <label for="withdraw-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">3. Amount (NGN)</label>
               <input id="withdraw-amount" type="number" min="1000" step="100" required placeholder="25000"
                 class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-lg font-extrabold text-slate-900 dark:text-white tabular-nums outline-none" />
               <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Fee: ₦30.00 flat &bull; Subject to KYC daily limit</p>
             </div>
-            <button type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
-              Withdraw NGN (-₦30 Fee)
+
+            <button id="btn-withdraw-submit" type="submit" disabled
+              class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm transition">
+              Verify Account Name First to Withdraw
             </button>
           </form>
         </div>
@@ -704,10 +747,25 @@
             <button type="button" data-bill-cat="CABLE_TV" onclick="setBillCategory('CABLE_TV')" class="bill-cat-btn py-2 rounded-xl text-xs font-extrabold text-slate-600 dark:text-slate-400">Cable TV</button>
           </div>
 
+          <!-- Prominent Red Error Banner for Failed Bill / Product Errors -->
+          <div id="bill-error-banner" class="hidden bg-rose-600/15 border border-rose-500 text-rose-700 dark:text-rose-200 rounded-2xl px-4 py-3 text-xs font-bold flex items-start justify-between gap-2">
+            <span id="bill-error-banner-text">Product does not exist</span>
+            <button type="button" onclick="clearBillErrorBanner()" class="text-[11px] font-extrabold underline shrink-0">Dismiss</button>
+          </div>
+
           <form id="form-bill-pay" onsubmit="executeBillPayment(event)" class="space-y-4">
             <div>
-              <label for="bill-provider" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Network / Biller</label>
+              <label for="bill-provider" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Network / Disco / Cable Provider</label>
               <select id="bill-provider" onchange="handleBillProviderChange()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none"></select>
+            </div>
+
+            <!-- Prepaid / Postpaid Selector for Electricity -->
+            <div id="electricity-meter-type-container" class="hidden space-y-1.5">
+              <label for="bill-meter-type" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Electricity Meter Type</label>
+              <select id="bill-meter-type" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-amber-600 dark:text-amber-400 outline-none">
+                <option value="PREPAID">Prepaid Meter (Token)</option>
+                <option value="POSTPAID">Postpaid Meter (Bill)</option>
+              </select>
             </div>
 
             <div id="data-plan-container" class="space-y-1.5">
@@ -753,10 +811,26 @@
       </section>
 
       <!-- ================================================================= -->
-      <!-- TAB 6: SETTINGS, THEME TOGGLE & GOOGLE AUTHENTICATOR 2FA          -->
+      <!-- TAB 6: SETTINGS, KYC, SUPPORT, SIGN OUT & 2FA                     -->
       <!-- ================================================================= -->
       <section id="view-settings" class="app-view hidden space-y-5">
         <div class="max-w-2xl mx-auto space-y-5">
+          <!-- KYC & Customer Support Quick Card -->
+          <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Verification &amp; Support</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Manage your BVN/NIN KYC tier or chat with Nikofy.ng Customer Support</p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" onclick="openKycModal()" class="px-3.5 py-2.5 rounded-xl bg-nikofy-blueAccent hover:bg-blue-800 text-white text-xs font-extrabold transition">
+                KYC Verification
+              </button>
+              <button type="button" onclick="openCustomerSupport()" class="px-3.5 py-2.5 rounded-xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
+                Customer Support
+              </button>
+            </div>
+          </div>
+
           <!-- Appearance / Light & Dark Mode -->
           <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 flex items-center justify-between">
             <div>
@@ -861,19 +935,48 @@
               </div>
             </div>
           </div>
+
+          <!-- Sign Out Action inside Settings -->
+          <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 flex items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Session</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Sign out of your Nikofy.ng account on this device</p>
+            </div>
+            <button type="button" onclick="signOutUser()" class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold transition shrink-0">
+              Sign Out
+            </button>
+          </div>
         </div>
       </section>
     </main>
 
-    <!-- Mobile Bottom Navigation -->
+    <!-- Mobile Bottom Navigation (with small icons right above each label) -->
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-nikofy-darkCard/95 backdrop-blur-md border-t border-slate-200 dark:border-nikofy-darkBorder px-1 py-2">
       <div class="max-w-md mx-auto grid grid-cols-6 gap-1">
-        <button type="button" data-nav="home" onclick="navigateTo('home')" class="mobile-nav-btn py-1.5 rounded-xl text-[10px] font-extrabold text-nikofy-green dark:text-emerald-400">Home</button>
-        <button type="button" data-nav="trade" onclick="navigateTo('trade')" class="mobile-nav-btn py-1.5 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400">Trade</button>
-        <button type="button" data-nav="transfer" onclick="navigateTo('transfer')" class="mobile-nav-btn py-1.5 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400">Transfer</button>
-        <button type="button" data-nav="bills" onclick="navigateTo('bills')" class="mobile-nav-btn py-1.5 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400">Bills</button>
-        <button type="button" data-nav="ledger" onclick="navigateTo('ledger')" class="mobile-nav-btn py-1.5 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400">Ledger</button>
-        <button type="button" data-nav="settings" onclick="navigateTo('settings')" class="mobile-nav-btn py-1.5 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400">Settings</button>
+        <button type="button" data-nav="home" onclick="navigateTo('home')" class="mobile-nav-btn py-1 rounded-xl text-[10px] font-extrabold text-nikofy-green dark:text-emerald-400 flex flex-col items-center gap-0.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+          <span>Home</span>
+        </button>
+        <button type="button" data-nav="trade" onclick="navigateTo('trade')" class="mobile-nav-btn py-1 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 flex flex-col items-center gap-0.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16V4m0 0L3 8m4-4l4 4"/><path d="M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+          <span>Trade</span>
+        </button>
+        <button type="button" data-nav="transfer" onclick="navigateTo('transfer')" class="mobile-nav-btn py-1 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 flex flex-col items-center gap-0.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          <span>Transfer</span>
+        </button>
+        <button type="button" data-nav="bills" onclick="navigateTo('bills')" class="mobile-nav-btn py-1 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 flex flex-col items-center gap-0.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span>Bills</span>
+        </button>
+        <button type="button" data-nav="ledger" onclick="navigateTo('ledger')" class="mobile-nav-btn py-1 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 flex flex-col items-center gap-0.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>
+          <span>Ledger</span>
+        </button>
+        <button type="button" data-nav="settings" onclick="navigateTo('settings')" class="mobile-nav-btn py-1 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 flex flex-col items-center gap-0.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
       </div>
     </nav>
   </div>
@@ -1022,6 +1125,228 @@
     const STORAGE_KEY = 'nikofy_ng_state_v1';
     const API_BASE_URL = 'https://nikofy-ng-1.onrender.com';
     const PAYSTACK_PUBLIC_KEY = 'pk_test_2fd1d0be93e6366a495246fcab17d7a02eb3ab92';
+    const SUPPORT_EMAIL = 'support@nikofy.ng';
+
+    // Comprehensive Nigerian Commercial, Non-Interest, Digital/PSB & Microfinance Banks
+    const NIGERIAN_BANKS = [
+      // Commercial & Non-Interest Banks
+      { code: '044', name: 'Access Bank Plc', type: 'Commercial' },
+      { code: '063', name: 'Access Bank (Diamond)', type: 'Commercial' },
+      { code: '108', name: 'Alpha Morgan Bank', type: 'Commercial' },
+      { code: '023', name: 'Citibank Nigeria', type: 'Commercial' },
+      { code: '050', name: 'Ecobank Nigeria', type: 'Commercial' },
+      { code: '070', name: 'Fidelity Bank', type: 'Commercial' },
+      { code: '011', name: 'First Bank of Nigeria', type: 'Commercial' },
+      { code: '214', name: 'First City Monument Bank (FCMB)', type: 'Commercial' },
+      { code: '103', name: 'Globus Bank', type: 'Commercial' },
+      { code: '058', name: 'Guaranty Trust Bank (GTBank)', type: 'Commercial' },
+      { code: '082', name: 'Keystone Bank', type: 'Commercial' },
+      { code: '303', name: 'Lotus Bank', type: 'Non-Interest' },
+      { code: '104', name: 'Optimus Bank', type: 'Commercial' },
+      { code: '101', name: 'Parallex Bank', type: 'Commercial' },
+      { code: '076', name: 'Polaris Bank', type: 'Commercial' },
+      { code: '105', name: 'PremiumTrust Bank', type: 'Commercial' },
+      { code: '100', name: 'Providus Bank', type: 'Commercial' },
+      { code: '102', name: 'Signature Bank', type: 'Non-Interest' },
+      { code: '221', name: 'Stanbic IBTC Bank', type: 'Commercial' },
+      { code: '068', name: 'Standard Chartered Bank', type: 'Commercial' },
+      { code: '232', name: 'Sterling Bank', type: 'Commercial' },
+      { code: '100', name: 'SunTrust Bank', type: 'Commercial' },
+      { code: '000026', name: 'Taj Bank', type: 'Non-Interest' },
+      { code: '000025', name: 'Titan Trust Bank', type: 'Commercial' },
+      { code: '032', name: 'Union Bank of Nigeria', type: 'Commercial' },
+      { code: '033', name: 'United Bank for Africa (UBA)', type: 'Commercial' },
+      { code: '215', name: 'Unity Bank', type: 'Commercial' },
+      { code: '035', name: 'Wema Bank', type: 'Commercial' },
+      { code: '057', name: 'Zenith Bank', type: 'Commercial' },
+      { code: '000037', name: 'Alternative Bank (Sterling Alternative)', type: 'Non-Interest' },
+
+      // Digital, PSB & Microfinance Banks (MFB)
+      { code: '999992', name: 'OPay Digital Services Limited (OPay)', type: 'MFB / Digital' },
+      { code: '50211', name: 'Kuda Microfinance Bank', type: 'MFB / Digital' },
+      { code: '50515', name: 'Moniepoint Microfinance Bank', type: 'MFB / Digital' },
+      { code: '999991', name: 'PalmPay', type: 'MFB / Digital' },
+      { code: '50273', name: 'AB Microfinance Bank', type: 'MFB' },
+      { code: '50298', name: 'Accion Microfinance Bank', type: 'MFB' },
+      { code: '50315', name: 'Addosser Microfinance Bank', type: 'MFB' },
+      { code: '50304', name: 'Afekhafe Microfinance Bank', type: 'MFB' },
+      { code: '50339', name: 'Agosasa Microfinance Bank', type: 'MFB' },
+      { code: '50342', name: 'Al-Hayat Microfinance Bank', type: 'MFB' },
+      { code: '50365', name: 'Amju Unique Microfinance Bank', type: 'MFB' },
+      { code: '50371', name: 'Ampersand Microfinance Bank', type: 'MFB' },
+      { code: '50383', name: 'Apple Microfinance Bank', type: 'MFB' },
+      { code: '50392', name: 'Assets Microfinance Bank', type: 'MFB' },
+      { code: '50409', name: 'Astrapolaris Microfinance Bank', type: 'MFB' },
+      { code: '50427', name: 'Bainescredit Microfinance Bank', type: 'MFB' },
+      { code: '50439', name: 'BC Kash Microfinance Bank', type: 'MFB' },
+      { code: '50445', name: 'Boctrust Microfinance Bank', type: 'MFB' },
+      { code: '50452', name: 'Bosak Microfinance Bank', type: 'MFB' },
+      { code: '50463', name: 'Bowen Microfinance Bank', type: 'MFB' },
+      { code: '50478', name: 'Carbon Microfinance Bank', type: 'MFB / Digital' },
+      { code: '50482', name: 'Cashconnect Microfinance Bank', type: 'MFB' },
+      { code: '50491', name: 'CEMCS Microfinance Bank', type: 'MFB' },
+      { code: '50502', name: 'Chanelle Microfinance Bank', type: 'MFB' },
+      { code: '50526', name: 'Chikum Microfinance Bank', type: 'MFB' },
+      { code: '50539', name: 'Citizens Trust Microfinance Bank', type: 'MFB' },
+      { code: '50547', name: 'Cloverleaf Microfinance Bank', type: 'MFB' },
+      { code: '50554', name: 'Concord Microfinance Bank', type: 'MFB' },
+      { code: '50563', name: 'Consumer Microfinance Bank', type: 'MFB' },
+      { code: '50571', name: 'Corestep Microfinance Bank', type: 'MFB' },
+      { code: '50585', name: 'Covenant Microfinance Bank', type: 'MFB' },
+      { code: '50592', name: 'Credit Afrique Microfinance Bank', type: 'MFB' },
+      { code: '50605', name: 'Daylight Microfinance Bank', type: 'MFB' },
+      { code: '50614', name: 'Ebsu Microfinance Bank', type: 'MFB' },
+      { code: '50629', name: 'Ekondo Microfinance Bank', type: 'MFB' },
+      { code: '50635', name: 'Emeralds Microfinance Bank', type: 'MFB' },
+      { code: '50644', name: 'Empire Trust Microfinance Bank', type: 'MFB' },
+      { code: '50658', name: 'Esan Microfinance Bank', type: 'MFB' },
+      { code: '50669', name: 'Eso-E Microfinance Bank', type: 'MFB' },
+      { code: '50672', name: 'Ewt Microfinance Bank', type: 'MFB' },
+      { code: '50689', name: 'FairMoney Microfinance Bank', type: 'MFB / Digital' },
+      { code: '50697', name: 'Fame Microfinance Bank', type: 'MFB' },
+      { code: '50703', name: 'Fast Microfinance Bank', type: 'MFB' },
+      { code: '50718', name: 'FBNQuest Merchant / Microfinance', type: 'MFB' },
+      { code: '50725', name: 'Fidelity Microfinance Bank', type: 'MFB' },
+      { code: '50739', name: 'Fina Trust Microfinance Bank', type: 'MFB' },
+      { code: '50746', name: 'First Multiple Microfinance Bank', type: 'MFB' },
+      { code: '50752', name: 'First Option Microfinance Bank', type: 'MFB' },
+      { code: '50761', name: 'First Royal Microfinance Bank', type: 'MFB' },
+      { code: '50774', name: 'Flutterwave / Trust Microfinance Bank', type: 'MFB' },
+      { code: '50788', name: 'Fortis Microfinance Bank', type: 'MFB' },
+      { code: '50793', name: 'Fullrange Microfinance Bank', type: 'MFB' },
+      { code: '50801', name: 'Futo Microfinance Bank', type: 'MFB' },
+      { code: '50819', name: 'Garkuwa Microfinance Bank', type: 'MFB' },
+      { code: '50824', name: 'Gateway Mortgage / Microfinance Bank', type: 'MFB' },
+      { code: '50832', name: 'Giant Stride Microfinance Bank', type: 'MFB' },
+      { code: '50846', name: 'Girei Microfinance Bank', type: 'MFB' },
+      { code: '50853', name: 'Good Neighbours Microfinance Bank', type: 'MFB' },
+      { code: '50867', name: 'Greenwich / Grobank Microfinance', type: 'MFB' },
+      { code: '50875', name: 'Grooming Microfinance Bank', type: 'MFB' },
+      { code: '50882', name: 'GTI Microfinance Bank', type: 'MFB' },
+      { code: '50894', name: 'Hackman Microfinance Bank', type: 'MFB' },
+      { code: '50906', name: 'Hasal Microfinance Bank', type: 'MFB' },
+      { code: '50918', name: 'Headway Microfinance Bank', type: 'MFB' },
+      { code: '50927', name: 'Ibile Microfinance Bank', type: 'MFB' },
+      { code: '50934', name: 'Ikire Microfinance Bank', type: 'MFB' },
+      { code: '50949', name: 'Ilaro Poly Microfinance Bank', type: 'MFB' },
+      { code: '50955', name: 'Imowo Microfinance Bank', type: 'MFB' },
+      { code: '50968', name: 'Infinity Microfinance Bank', type: 'MFB' },
+      { code: '50972', name: 'Insight Microfinance Bank', type: 'MFB' },
+      { code: '50983', name: 'Island Microfinance Bank', type: 'MFB' },
+      { code: '50994', name: 'Isuofia Microfinance Bank', type: 'MFB' },
+      { code: '51002', name: 'Kadpoly Microfinance Bank', type: 'MFB' },
+      { code: '51018', name: 'KCMB Microfinance Bank', type: 'MFB' },
+      { code: '51026', name: 'Kegow / Adams Microfinance Bank', type: 'MFB' },
+      { code: '51034', name: 'Kredi Money Microfinance Bank', type: 'MFB' },
+      { code: '51049', name: 'Lagos Building Investment / MFB', type: 'MFB' },
+      { code: '51058', name: 'LAPO Microfinance Bank', type: 'MFB' },
+      { code: '51067', name: 'Lavender Microfinance Bank', type: 'MFB' },
+      { code: '51073', name: 'Leadremit / Lead Microfinance Bank', type: 'MFB' },
+      { code: '51084', name: 'Legend Microfinance Bank', type: 'MFB' },
+      { code: '51092', name: 'Letshego Microfinance Bank', type: 'MFB' },
+      { code: '51105', name: 'Living Trust Microfinance Bank', type: 'MFB' },
+      { code: '51118', name: 'Lovonus Microfinance Bank', type: 'MFB' },
+      { code: '51129', name: 'Mainstreet Microfinance Bank', type: 'MFB' },
+      { code: '51137', name: 'Malachy Microfinance Bank', type: 'MFB' },
+      { code: '51142', name: 'Manifold Microfinance Bank', type: 'MFB' },
+      { code: '51158', name: 'Mayfair Microfinance Bank', type: 'MFB' },
+      { code: '51164', name: 'Mayfresh Microfinance Bank', type: 'MFB' },
+      { code: '51179', name: 'Megapraise Microfinance Bank', type: 'MFB' },
+      { code: '51186', name: 'Meridian Microfinance Bank', type: 'MFB' },
+      { code: '51193', name: 'Microvis Microfinance Bank', type: 'MFB' },
+      { code: '51204', name: 'Midland Microfinance Bank', type: 'MFB' },
+      { code: '51217', name: 'MoneyBox Microfinance Bank', type: 'MFB' },
+      { code: '51225', name: 'Mutual Benefits / Mutual Trust MFB', type: 'MFB' },
+      { code: '51238', name: 'Nagarta Microfinance Bank', type: 'MFB' },
+      { code: '51246', name: 'Nasarawa Microfinance Bank', type: 'MFB' },
+      { code: '51253', name: 'Ndiorah Microfinance Bank', type: 'MFB' },
+      { code: '51261', name: 'New Dawn Microfinance Bank', type: 'MFB' },
+      { code: '51279', name: 'Nigerian Navy Microfinance Bank', type: 'MFB' },
+      { code: '51284', name: 'Nnew Women Microfinance Bank', type: 'MFB' },
+      { code: '51292', name: 'Nova Microfinance Bank', type: 'MFB' },
+      { code: '51308', name: 'NPF Microfinance Bank', type: 'MFB' },
+      { code: '51315', name: 'Oche Microfinance Bank', type: 'MFB' },
+      { code: '51324', name: 'Ohafia Microfinance Bank', type: 'MFB' },
+      { code: '51336', name: 'Okpoga Microfinance Bank', type: 'MFB' },
+      { code: '51349', name: 'Olabisi Onabanjo Univ MFB', type: 'MFB' },
+      { code: '51357', name: 'Olowolagba Microfinance Bank', type: 'MFB' },
+      { code: '51362', name: 'Oluchukwu Microfinance Bank', type: 'MFB' },
+      { code: '51375', name: 'Oluyole Microfinance Bank', type: 'MFB' },
+      { code: '51388', name: 'Oma Microfinance Bank', type: 'MFB' },
+      { code: '51394', name: 'Omiye Microfinance Bank', type: 'MFB' },
+      { code: '51407', name: 'Oraukwu Microfinance Bank', type: 'MFB' },
+      { code: '51412', name: 'Orisun Microfinance Bank', type: 'MFB' },
+      { code: '51428', name: 'Ospoly Microfinance Bank', type: 'MFB' },
+      { code: '51435', name: 'Otuo Microfinance Bank', type: 'MFB' },
+      { code: '51441', name: 'Paga / SmartCash PSB', type: 'MFB / Digital' },
+      { code: '51459', name: 'Parkway Microfinance Bank', type: 'MFB' },
+      { code: '51463', name: 'PatrickGold Microfinance Bank', type: 'MFB' },
+      { code: '51478', name: 'Peace Microfinance Bank', type: 'MFB' },
+      { code: '51484', name: 'PecanTrust Microfinance Bank', type: 'MFB' },
+      { code: '51492', name: 'Pennywise Microfinance Bank', type: 'MFB' },
+      { code: '51506', name: 'Personal Trust Microfinance Bank', type: 'MFB' },
+      { code: '51519', name: 'Petra Microfinance Bank', type: 'MFB' },
+      { code: '51523', name: 'Pillar Microfinance Bank', type: 'MFB' },
+      { code: '51537', name: 'Platinum / Prestige Microfinance Bank', type: 'MFB' },
+      { code: '51548', name: 'Polyibadan Microfinance Bank', type: 'MFB' },
+      { code: '51552', name: 'Prestige Microfinance Bank', type: 'MFB' },
+      { code: '51564', name: 'Purplemoney Microfinance Bank', type: 'MFB' },
+      { code: '51571', name: ' Rahamaniyya Microfinance Bank', type: 'MFB' },
+      { code: '51589', name: 'Regent Microfinance Bank', type: 'MFB' },
+      { code: '51595', name: 'Reliance Microfinance Bank', type: 'MFB' },
+      { code: '51608', name: 'Renmoney Microfinance Bank', type: 'MFB / Digital' },
+      { code: '51614', name: 'Rephidim Microfinance Bank', type: 'MFB' },
+      { code: '51627', name: 'Richway Microfinance Bank', type: 'MFB' },
+      { code: '51632', name: 'Rigo Microfinance Bank', type: 'MFB' },
+      { code: '51645', name: 'Royal Exchange Microfinance Bank', type: 'MFB' },
+      { code: '51659', name: 'Rubies Microfinance Bank', type: 'MFB / Digital' },
+      { code: '51663', name: 'Safe Haven Microfinance Bank', type: 'MFB' },
+      { code: '51678', name: 'Sagamu Microfinance Bank', type: 'MFB' },
+      { code: '51684', name: 'Seedvest Microfinance Bank', type: 'MFB' },
+      { code: '51691', name: 'Shepherd Trust Microfinance Bank', type: 'MFB' },
+      { code: '51702', name: 'Sparkle Microfinance Bank', type: 'MFB / Digital' },
+      { code: '51715', name: 'Standard Microfinance Bank', type: 'MFB' },
+      { code: '51728', name: 'Stellas Microfinance Bank', type: 'MFB' },
+      { code: '51734', name: 'Sulaimon / Sultan Microfinance Bank', type: 'MFB' },
+      { code: '51749', name: 'TCF Microfinance Bank', type: 'MFB' },
+      { code: '51756', name: 'Thrive / Trive Microfinance Bank', type: 'MFB' },
+      { code: '51762', name: 'Titans Microfinance Bank', type: 'MFB' },
+      { code: '51778', name: 'Trident Microfinance Bank', type: 'MFB' },
+      { code: '51783', name: 'U & C Microfinance Bank', type: 'MFB' },
+      { code: '51795', name: 'Uhuru Microfinance Bank', type: 'MFB' },
+      { code: '51801', name: 'Unaab Microfinance Bank', type: 'MFB' },
+      { code: '51817', name: 'Uniben Microfinance Bank', type: 'MFB' },
+      { code: '51824', name: 'Unical Microfinance Bank', type: 'MFB' },
+      { code: '51839', name: 'Unilorin Microfinance Bank', type: 'MFB' },
+      { code: '51842', name: 'Unilag Microfinance Bank', type: 'MFB' },
+      { code: '51856', name: 'Unimaid Microfinance Bank', type: 'MFB' },
+      { code: '51863', name: 'Union Microfinance Bank', type: 'MFB' },
+      { code: '51878', name: 'Uniosun Microfinance Bank', type: 'MFB' },
+      { code: '51885', name: 'Uniuyo Microfinance Bank', type: 'MFB' },
+      { code: '51892', name: 'Uzondu Microfinance Bank', type: 'MFB' },
+      { code: '51904', name: 'Vale / VFD Microfinance Bank', type: 'MFB / Digital' },
+      { code: '51918', name: 'Verdant Microfinance Bank', type: 'MFB' },
+      { code: '51925', name: 'Virtue Microfinance Bank', type: 'MFB' },
+      { code: '51931', name: 'Visa Microfinance Bank', type: 'MFB' },
+      { code: '51947', name: 'Wetland Microfinance Bank', type: 'MFB' },
+      { code: '51953', name: 'Winview Microfinance Bank', type: 'MFB' },
+      { code: '51968', name: 'Xpress / Xslnce Microfinance Bank', type: 'MFB' },
+      { code: '51972', name: 'YCT Microfinance Bank', type: 'MFB' },
+      { code: '51989', name: 'Yes Microfinance Bank', type: 'MFB' },
+      { code: '51994', name: 'Zaira Microfinance Bank', type: 'MFB' },
+      { code: '52001', name: 'Zerebe / Zik Microfinance Bank', type: 'MFB' },
+    ];
+
+    let allWithdrawalBanks = [...NIGERIAN_BANKS];
+    let verifiedBankAccount = {
+      verified: false,
+      bankCode: '',
+      bankName: '',
+      accountNumber: '',
+      accountName: '',
+      isSandbox: false,
+    };
+    let accountResolveTimer = null;
 
     const MARKET_COINS = {
       BTC: { name: 'Bitcoin (BTC / NGN)', price: 81186785, change: '-2.70%', positive: false, points: [83500000, 83100000, 82600000, 82900000, 82000000, 81500000, 81186785] },
@@ -1054,23 +1379,35 @@
 
     const BILL_PROVIDERS = {
       DATA: [
-        { code: 'AIRTEL', name: 'Airtel Nigeria', label: 'Airtel Mobile Number', sample: '08021234567' },
-        { code: 'MTN', name: 'MTN Nigeria', label: 'MTN Mobile Number', sample: '08031234567' },
-        { code: 'GLO', name: 'Glo Nigeria', label: 'Glo Mobile Number', sample: '08051234567' },
-        { code: '9MOBILE', name: '9mobile', label: '9mobile Number', sample: '08091234567' },
+        { code: 'AIRTEL', name: 'Airtel Nigeria', label: 'Airtel Mobile Number', sample: '08011111111' },
+        { code: 'MTN', name: 'MTN Nigeria', label: 'MTN Mobile Number', sample: '08011111111' },
+        { code: 'GLO', name: 'Glo Nigeria', label: 'Glo Mobile Number', sample: '08011111111' },
+        { code: '9MOBILE', name: '9mobile', label: '9mobile Number', sample: '08011111111' },
       ],
       AIRTIME: [
-        { code: 'MTN', name: 'MTN Airtime', label: 'Mobile Number', sample: '08101424570' },
-        { code: 'AIRTEL', name: 'Airtel Airtime', label: 'Mobile Number', sample: '08021234567' },
-        { code: 'GLO', name: 'Glo Airtime', label: 'Mobile Number', sample: '08051234567' },
+        { code: 'MTN', name: 'MTN Airtime', label: 'Mobile Number', sample: '08011111111' },
+        { code: 'AIRTEL', name: 'Airtel Airtime', label: 'Mobile Number', sample: '08011111111' },
+        { code: 'GLO', name: 'Glo Airtime', label: 'Mobile Number', sample: '08011111111' },
+        { code: '9MOBILE', name: '9mobile Airtime', label: 'Mobile Number', sample: '08011111111' },
       ],
       ELECTRICITY: [
-        { code: 'IKEDC', name: 'IKEDC (Ikeja Electric)', label: 'Meter Number', sample: '04291827364' },
-        { code: 'EKEDC', name: 'EKEDC (Eko Electric)', label: 'Meter Number', sample: '11092837465' },
+        { code: 'IKEDC', name: 'IKEDC — Ikeja Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'EKEDC', name: 'EKEDC — Eko Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'AEDC', name: 'AEDC — Abuja Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'EEDC', name: 'EEDC — Enugu Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'IBEDC', name: 'IBEDC — Ibadan Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'KEDCO', name: 'KEDCO — Kano Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'KAEDCO', name: 'KAEDCO — Kaduna Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'PHED', name: 'PHED — Port Harcourt Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'JED', name: 'JED — Jos Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'BEDC', name: 'BEDC — Benin Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'YEDC', name: 'YEDC — Yola Electric', label: 'Meter Number', sample: '1111111111111' },
+        { code: 'ABA', name: 'APLE — Aba Electric', label: 'Meter Number', sample: '1111111111111' },
       ],
       CABLE_TV: [
-        { code: 'DSTV', name: 'DStv Subscription', label: 'Smartcard / IUC', sample: '7029183746' },
-        { code: 'GOTV', name: 'GOtv Subscription', label: 'IUC Number', sample: '2049182736' },
+        { code: 'DSTV', name: 'DStv Subscription', label: 'Smartcard / IUC Number', sample: '1212121212' },
+        { code: 'GOTV', name: 'GOtv Subscription', label: 'IUC Number', sample: '1212121212' },
+        { code: 'STARTIMES', name: 'StarTimes Subscription', label: 'Smartcard / Decoder Number', sample: '1212121212' },
       ],
     };
 
@@ -1139,6 +1476,267 @@
     let otpTimer = null;
     let pendingTransactionAction = null;
 
+    // =====================================================================
+    // WITHDRAWAL BANK SEARCH + ACCOUNT NAME VERIFICATION
+    // =====================================================================
+    function renderWithdrawalBankOptions(selectedCode = '') {
+      const sel = document.getElementById('withdraw-bank');
+      const searchEl = document.getElementById('withdraw-bank-search');
+      const badgeEl = document.getElementById('bank-count-badge');
+      if (!sel) return;
+
+      const query = (searchEl?.value || '').trim().toLowerCase();
+      const filtered = query
+        ? allWithdrawalBanks.filter((b) =>
+            b.name.toLowerCase().includes(query) ||
+            String(b.code).toLowerCase().includes(query) ||
+            String(b.type || '').toLowerCase().includes(query)
+          )
+        : allWithdrawalBanks;
+
+      if (badgeEl) {
+        badgeEl.textContent = `${filtered.length} of ${allWithdrawalBanks.length} Banks`;
+      }
+
+      if (filtered.length === 0) {
+        sel.innerHTML = `<option value="">No matching bank found — try another search</option>`;
+        resetAccountVerificationUI('Select a valid bank to verify account name.');
+        return;
+      }
+
+      const targetCode = selectedCode || sel.value;
+      sel.innerHTML = filtered
+        .map((b) => `<option value="${b.code}" data-bank-name="${escapeHtmlAttr(b.name)}">${escapeHtmlText(b.name)} (${b.type || 'Bank'})</option>`)
+        .join('');
+
+      if (targetCode && filtered.some((b) => String(b.code) === String(targetCode))) {
+        sel.value = String(targetCode);
+      } else {
+        sel.selectedIndex = 0;
+      }
+    }
+
+    function escapeHtmlText(str) {
+      return String(str || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function escapeHtmlAttr(str) {
+      return String(str || '').replace(/"/g, '&quot;');
+    }
+
+    function filterWithdrawalBanks() {
+      const currentCode = document.getElementById('withdraw-bank')?.value || '';
+      renderWithdrawalBankOptions(currentCode);
+      onWithdrawalBankOrAccountChange();
+    }
+
+    function clearBankSearch() {
+      const searchEl = document.getElementById('withdraw-bank-search');
+      if (searchEl) searchEl.value = '';
+      renderWithdrawalBankOptions();
+      onWithdrawalBankOrAccountChange();
+    }
+
+    async function fetchLiveNigerianBanks() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/banks/ng`);
+        const data = await parseJsonSafe(res);
+        if (res.ok && data.ok && Array.isArray(data.banks) && data.banks.length > 0) {
+          const map = new Map();
+          [...allWithdrawalBanks, ...data.banks].forEach((b) => {
+            const key = `${String(b.code)}::${String(b.name).toLowerCase()}`;
+            if (!map.has(key)) map.set(key, b);
+          });
+          allWithdrawalBanks = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+          renderWithdrawalBankOptions();
+        }
+      } catch (err) {
+        console.warn('Using built-in Nigerian bank directory:', err.message || err);
+      }
+    }
+
+    function resetAccountVerificationUI(note = 'Enter a 10-digit account number to automatically verify the account name.') {
+      verifiedBankAccount = {
+        verified: false,
+        bankCode: '',
+        bankName: '',
+        accountNumber: '',
+        accountName: '',
+        isSandbox: false,
+      };
+      const box = document.getElementById('withdraw-acct-verify-box');
+      const submitBtn = document.getElementById('btn-withdraw-submit');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verify Account Name First to Withdraw';
+      }
+      const acct = (document.getElementById('withdraw-acct-num')?.value || '').trim();
+      if (!box) return;
+      if (acct.length === 0) {
+        box.classList.add('hidden');
+        return;
+      }
+      box.classList.remove('hidden');
+      box.className = 'rounded-2xl p-3 text-xs border bg-white dark:bg-nikofy-darkBg border-slate-200 dark:border-nikofy-darkBorder text-slate-600 dark:text-slate-300';
+      document.getElementById('withdraw-acct-verify-label').textContent = 'Account Name Lookup';
+      const badge = document.getElementById('withdraw-acct-verify-badge');
+      badge.textContent = acct.length === 10 ? 'VERIFYING...' : `${acct.length}/10 DIGITS`;
+      badge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400';
+      document.getElementById('withdraw-acct-resolved-name').textContent = acct.length === 10 ? 'Checking bank account name...' : 'Type all 10 digits to verify name';
+      document.getElementById('withdraw-acct-verify-note').textContent = note;
+    }
+
+    function onWithdrawalBankOrAccountChange() {
+      const acctEl = document.getElementById('withdraw-acct-num');
+      if (acctEl) {
+        acctEl.value = acctEl.value.replace(/\D/g, '').slice(0, 10);
+      }
+      const acct = acctEl?.value || '';
+      const bankCode = document.getElementById('withdraw-bank')?.value || '';
+
+      if (accountResolveTimer) clearTimeout(accountResolveTimer);
+
+      if (!bankCode) {
+        resetAccountVerificationUI('Select a bank first.');
+        return;
+      }
+
+      if (acct.length < 10) {
+        resetAccountVerificationUI('Account name will appear here once you enter a valid 10-digit account number.');
+        return;
+      }
+
+      resetAccountVerificationUI('Resolving account name from bank...');
+      accountResolveTimer = setTimeout(() => {
+        resolveWithdrawalAccountName(false);
+      }, 350);
+    }
+
+    function handleAccountNumberInput() {
+      onWithdrawalBankOrAccountChange();
+    }
+
+    async function resolveWithdrawalAccountName(showFeedbackToast = false) {
+      const bankSel = document.getElementById('withdraw-bank');
+      const bankCode = bankSel?.value || '';
+      const selectedOpt = bankSel?.selectedOptions?.[0];
+      const bankName = selectedOpt?.dataset?.bankName || selectedOpt?.textContent || bankCode;
+      const acct = (document.getElementById('withdraw-acct-num')?.value || '').replace(/\D/g, '').slice(0, 10);
+
+      if (!bankCode) {
+        if (showFeedbackToast) showToast('Choose a bank first.', 'error');
+        return;
+      }
+      if (!/^[0-9]{10}$/.test(acct)) {
+        if (showFeedbackToast) showToast('Enter a complete 10-digit account number.', 'error');
+        return;
+      }
+
+      const box = document.getElementById('withdraw-acct-verify-box');
+      const badge = document.getElementById('withdraw-acct-verify-badge');
+      const nameEl = document.getElementById('withdraw-acct-resolved-name');
+      const noteEl = document.getElementById('withdraw-acct-verify-note');
+      const submitBtn = document.getElementById('btn-withdraw-submit');
+      const verifyBtn = document.getElementById('btn-verify-acct-name');
+
+      if (box) {
+        box.classList.remove('hidden');
+        box.className = 'rounded-2xl p-3 text-xs border bg-white dark:bg-nikofy-darkBg border-sky-500/30 text-slate-700 dark:text-slate-300';
+      }
+      if (badge) {
+        badge.textContent = 'RESOLVING';
+        badge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400';
+      }
+      if (nameEl) nameEl.textContent = 'Verifying account holder name...';
+      if (noteEl) noteEl.textContent = `Checking ${bankName} • ${acct}`;
+      if (verifyBtn) verifyBtn.disabled = true;
+
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/bank/resolve?account_number=${encodeURIComponent(acct)}&bank_code=${encodeURIComponent(bankCode)}`,
+          { method: 'GET', headers: getNikofyAuthHeaders() }
+        );
+        const data = await parseJsonSafe(res);
+
+        const resolvedName =
+          data?.accountName ||
+          data?.account_name ||
+          data?.data?.account_name ||
+          data?.data?.accountName ||
+          '';
+
+        if (res.ok && data.ok !== false && resolvedName) {
+          verifiedBankAccount = {
+            verified: true,
+            bankCode,
+            bankName,
+            accountNumber: acct,
+            accountName: String(resolvedName).trim(),
+            isSandbox: Boolean(data.sandbox),
+          };
+          if (box) {
+            box.className = 'rounded-2xl p-3 text-xs border bg-emerald-500/10 border-emerald-500/40 text-emerald-900 dark:text-emerald-100';
+          }
+          if (badge) {
+            badge.textContent = data.sandbox ? 'VERIFIED (TEST)' : 'VERIFIED';
+            badge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300';
+          }
+          if (nameEl) nameEl.textContent = verifiedBankAccount.accountName;
+          if (noteEl) noteEl.textContent = `${bankName} • ${acct} — Confirm name matches before entering amount`;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Withdraw NGN (-₦30 Fee)';
+          }
+          if (showFeedbackToast) {
+            showToast(`Account verified: ${verifiedBankAccount.accountName}`, 'success');
+          }
+          return;
+        }
+
+        const errMsg = data?.error || data?.message || 'Could not verify account name for this bank and account number.';
+        verifiedBankAccount.verified = false;
+        if (box) {
+          box.className = 'rounded-2xl p-3 text-xs border bg-rose-500/10 border-rose-500/40 text-rose-800 dark:text-rose-200';
+        }
+        if (badge) {
+          badge.textContent = 'UNVERIFIED';
+          badge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300';
+        }
+        if (nameEl) nameEl.textContent = 'Account Name Not Found';
+        if (noteEl) noteEl.textContent = errMsg;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Verify Account Name First to Withdraw';
+        }
+        if (showFeedbackToast) showToast(errMsg, 'error');
+      } catch (err) {
+        verifiedBankAccount.verified = false;
+        if (box) {
+          box.className = 'rounded-2xl p-3 text-xs border bg-rose-500/10 border-rose-500/40 text-rose-800 dark:text-rose-200';
+        }
+        if (badge) {
+          badge.textContent = 'LOOKUP ERROR';
+          badge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300';
+        }
+        if (nameEl) nameEl.textContent = 'Unable to Verify Account Name';
+        if (noteEl) noteEl.textContent = err.message || 'Check connection or backend /api/bank/resolve route.';
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Verify Account Name First to Withdraw';
+        }
+        if (showFeedbackToast) showToast(err.message || 'Account lookup failed.', 'error');
+      } finally {
+        if (verifyBtn) verifyBtn.disabled = false;
+      }
+    }
+
+    function openCustomerSupport() {
+      const subject = encodeURIComponent(`Nikofy.ng Support (${appState.user?.username || 'User'})`);
+      const body = encodeURIComponent(`Hello Nikofy.ng Support,\nAccount: ${appState.user?.email || ''}\nUsername: ${appState.user?.username || ''}\n\nHow can we help you today?`);
+      window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+      showToast(`Support contact: ${SUPPORT_EMAIL}`, 'info');
+    }
+
     function getNikofyAuthHeaders(extra = {}) {
       const headers = { 'Content-Type': 'application/json', ...extra };
       if (appState.authToken) {
@@ -1164,6 +1762,18 @@
     function setBillDiagnostic(text) {
       const box = document.getElementById('bill-api-diagnostic');
       if (box) box.textContent = text;
+    }
+
+    function showBillErrorBanner(message) {
+      const banner = document.getElementById('bill-error-banner');
+      const textEl = document.getElementById('bill-error-banner-text');
+      if (textEl) textEl.textContent = message || 'Product does not exist';
+      if (banner) banner.classList.remove('hidden');
+    }
+
+    function clearBillErrorBanner() {
+      const banner = document.getElementById('bill-error-banner');
+      if (banner) banner.classList.add('hidden');
     }
 
     function calculateCryptoServiceFeeUsd(amountUsd) {
@@ -1785,13 +2395,13 @@
 
       document.querySelectorAll('.nav-pill').forEach((b) => {
         b.className = b.dataset.nav === tab
-          ? 'nav-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-nikofy-green text-white'
-          : 'nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400';
+          ? 'nav-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-nikofy-green text-white flex flex-col items-center gap-0.5'
+          : 'nav-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 flex flex-col items-center gap-0.5';
       });
       document.querySelectorAll('.mobile-nav-btn').forEach((b) => {
         b.className = b.dataset.nav === tab
-          ? 'mobile-nav-btn py-1.5 rounded-xl text-[10px] font-extrabold text-nikofy-green dark:text-emerald-400'
-          : 'mobile-nav-btn py-1.5 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400';
+          ? 'mobile-nav-btn py-1 rounded-xl text-[10px] font-extrabold text-nikofy-green dark:text-emerald-400 flex flex-col items-center gap-0.5'
+          : 'mobile-nav-btn py-1 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 flex flex-col items-center gap-0.5';
       });
       syncAllUI();
     }
@@ -2012,6 +2622,7 @@
         document.getElementById(`panel-${k}`).classList.toggle('hidden', k !== sub);
       });
       if (sub === 'p2p') updateP2pCurrencyLabels();
+      if (sub === 'withdraw') renderWithdrawalBankOptions();
     }
 
     function updateP2pCurrencyLabels() {
@@ -2363,28 +2974,59 @@
       );
     }
 
-    function executeBankWithdrawal(e) {
+    async function executeBankWithdrawal(e) {
       e.preventDefault();
       if (appState.user.frozen) return showToast('Account Frozen: Upgrade to Tier 2 (NIN) to unlock.', 'error');
-      const bank = document.getElementById('withdraw-bank').value;
-      const acct = document.getElementById('withdraw-acct-num').value.trim();
-      const amt = Number(document.getElementById('withdraw-amount').value || 0);
+      const bankSel = document.getElementById('withdraw-bank');
+      const bankCode = bankSel?.value || '';
+      const selectedOpt = bankSel?.selectedOptions?.[0];
+      const bank = selectedOpt?.dataset?.bankName || selectedOpt?.textContent || bankCode;
+      const acct = (document.getElementById('withdraw-acct-num')?.value || '').replace(/\D/g, '').slice(0, 10);
+      const amt = Number(document.getElementById('withdraw-amount')?.value || 0);
       const fee = 30;
       const limit = KYC_LIMITS[appState.user.kycTier].ngnDaily;
 
+      if (!bankCode) return showToast('Select a bank first.', 'error');
+      if (!/^[0-9]{10}$/.test(acct)) return showToast('Enter a valid 10-digit account number.', 'error');
+
+      if (
+        !verifiedBankAccount.verified ||
+        verifiedBankAccount.bankCode !== bankCode ||
+        verifiedBankAccount.accountNumber !== acct ||
+        !verifiedBankAccount.accountName
+      ) {
+        await resolveWithdrawalAccountName(true);
+        if (!verifiedBankAccount.verified || !verifiedBankAccount.accountName) {
+          return showToast('Please verify the account name before withdrawing.', 'error');
+        }
+      }
+
+      const recipientAccountName = verifiedBankAccount.accountName;
+
+      if (!(amt >= 1000)) return showToast('Minimum withdrawal amount is ₦1,000.', 'error');
       if (amt > limit) return showToast(`Exceeds ${KYC_LIMITS[appState.user.kycTier].name} daily limit (${formatNgn(limit)}).`, 'error');
       if (amt + fee > appState.balances.NGN) return showToast('Insufficient NGN balance (incl. ₦30 fee).', 'error');
 
-      authorizeTransactionWithPasscode(`Withdraw ${formatNgn(amt)} to ${bank} (${acct}) + ₦30 fee`, () => {
-        appState.balances.NGN -= (amt + fee);
-        recordAndOpenInvoice({
-          type: 'BANK_WITHDRAWAL',
-          title: `Bank Withdrawal (${bank})`,
-          subtitle: `Acct ${acct} • Fee ₦30.00`,
-          amountText: `-${formatNgn(amt + fee)}`,
-          invoice: { Bank: bank, Account: acct, 'Withdrawal Amount': formatNgn(amt), 'Nikofy.ng Fee': '₦30.00', 'Total Debited': formatNgn(amt + fee) }
-        });
-      });
+      authorizeTransactionWithPasscode(
+        `Withdraw ${formatNgn(amt)} to ${recipientAccountName} (${bank} • ${acct}) + ₦30 fee`,
+        () => {
+          appState.balances.NGN -= (amt + fee);
+          recordAndOpenInvoice({
+            type: 'BANK_WITHDRAWAL',
+            title: `Bank Withdrawal (${bank})`,
+            subtitle: `${recipientAccountName} • ${acct} • Fee ₦30.00`,
+            amountText: `-${formatNgn(amt + fee)}`,
+            invoice: {
+              'Account Name': recipientAccountName,
+              Bank: bank,
+              Account: acct,
+              'Withdrawal Amount': formatNgn(amt),
+              'Nikofy.ng Fee': '₦30.00',
+              'Total Debited': formatNgn(amt + fee),
+            },
+          });
+        }
+      );
     }
 
     // =====================================================================
@@ -2393,6 +3035,7 @@
     function setBillCategory(cat) {
       appState.ui.billCategory = cat;
       saveState();
+      clearBillErrorBanner();
       document.querySelectorAll('.bill-cat-btn').forEach((b) => {
         b.className = b.dataset.billCat === cat
           ? 'bill-cat-btn py-2 rounded-xl text-xs font-extrabold bg-nikofy-green text-white'
@@ -2400,6 +3043,7 @@
       });
       const sel = document.getElementById('bill-provider');
       sel.innerHTML = BILL_PROVIDERS[cat].map((p) => `<option value="${p.code}">${p.name}</option>`).join('');
+      document.getElementById('electricity-meter-type-container').classList.toggle('hidden', cat !== 'ELECTRICITY');
       document.getElementById('data-plan-container').classList.toggle('hidden', cat !== 'DATA');
       document.getElementById('bill-amount-container').classList.toggle('hidden', cat === 'DATA');
       handleBillProviderChange();
@@ -2428,26 +3072,37 @@
 
     function executeBillPayment(e) {
       e.preventDefault();
+      clearBillErrorBanner();
+
       if (appState.user.frozen) {
-        setBillDiagnostic('Blocked: Account is FROZEN. Upgrade to Tier 2 (NIN).');
-        return showToast('Account Frozen: Upgrade to Tier 2 (NIN) to unlock.', 'error');
+        const msg = 'Account Frozen: Upgrade to Tier 2 (NIN) to unlock bill payments.';
+        showBillErrorBanner(msg);
+        setBillDiagnostic(`Blocked: ${msg}`);
+        return showToast(msg, 'error');
       }
 
       const cat = appState.ui.billCategory;
       const code = document.getElementById('bill-provider').value;
       const cust = document.getElementById('bill-customer-id').value.trim();
       const amt = Number(document.getElementById('bill-amount-ngn').value || 0);
+      const meterType = cat === 'ELECTRICITY'
+        ? (document.getElementById('bill-meter-type')?.value || 'PREPAID')
+        : undefined;
 
       if (!cust) {
-        setBillDiagnostic('Validation error: Customer ID / phone number is required.');
-        return showToast('Enter a valid customer ID or phone number.', 'error');
+        const msg = 'Customer ID / meter / smartcard / phone number is required.';
+        showBillErrorBanner(msg);
+        setBillDiagnostic(`Validation error: ${msg}`);
+        return showToast(msg, 'error');
       }
       if (!(amt > 0)) {
-        setBillDiagnostic('Validation error: Bill amount must be greater than ₦0.');
-        return showToast('Enter a valid bill amount.', 'error');
+        const msg = 'Bill amount must be greater than ₦0.';
+        showBillErrorBanner(msg);
+        setBillDiagnostic(`Validation error: ${msg}`);
+        return showToast(msg, 'error');
       }
 
-      let planLabel = `${code} ${cat}`;
+      let planLabel = meterType ? `${code} ${meterType}` : `${code} ${cat}`;
       if (cat === 'DATA') {
         const plans = DATA_PLANS[code] || DATA_PLANS.AIRTEL;
         const idx = Number(document.getElementById('bill-data-plan').value || 0);
@@ -2458,9 +3113,11 @@
       }
 
       if (!appState.authToken) {
-        setBillDiagnostic('No authToken found in session. Please Sign In with your 6-digit email OTP first so requests hit Render with Authorization.');
+        const msg = 'Sign in with your 6-digit email OTP first so /api/bills/pay sends to Render.';
+        showBillErrorBanner(msg);
+        setBillDiagnostic('No authToken found in session. Please Sign In with your 6-digit email OTP first.');
         updateBillsAuthBadge('Sign In Required', 'warn');
-        showToast('Sign in with your 6-digit email OTP so /api/bills/pay sends to Render.', 'error');
+        showToast(msg, 'error');
         return;
       }
 
@@ -2471,7 +3128,7 @@
           submitBtn.disabled = true;
           submitBtn.textContent = 'Sending to Render & VTpass...';
         }
-        setBillDiagnostic(`Sending POST ${API_BASE_URL}/api/bills/pay (${code} ${cat}, ${cust}, ₦${amt})...`);
+        setBillDiagnostic(`Sending POST ${API_BASE_URL}/api/bills/pay (${code} ${cat}${meterType ? ' ' + meterType : ''}, ${cust}, ₦${amt})...`);
 
         try {
           const res = await fetch(`${API_BASE_URL}/api/bills/pay`, {
@@ -2480,6 +3137,7 @@
             body: JSON.stringify({
               category: cat,
               provider: code,
+              meterType,
               customerId: cust,
               planLabel,
               amountKobo,
@@ -2489,23 +3147,29 @@
           const data = await parseJsonSafe(res);
 
           if (!res.ok || data.ok === false) {
-            const errMsg = data.error || data.message || `HTTP ${res.status} from /api/bills/pay`;
+            const rawErr = data.error || data.message || data.response_description || `HTTP ${res.status} from /api/bills/pay`;
+            const errMsg = /product does not exist/i.test(String(rawErr))
+              ? 'Product does not exist (check Disco/Meter Type or VTpass sandbox service enablement)'
+              : String(rawErr);
+            showBillErrorBanner(errMsg);
             setBillDiagnostic(`Render /api/bills/pay failed (${res.status}): ${JSON.stringify(data)}`);
             showToast(errMsg, 'error');
             return;
           }
 
+          clearBillErrorBanner();
           setBillDiagnostic(`Render 200 OK: ${JSON.stringify(data)}`);
 
           const refId = data.reference || data.data?.reference || null;
           const serverToken = data.token || data.meterToken || data.data?.token || null;
           await syncBackendWalletSnapshot();
 
-          const token = cat === 'ELECTRICITY'
+          const token = cat === 'ELECTRICITY' && meterType === 'PREPAID'
             ? (serverToken || `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`)
             : serverToken;
           const inv = {
             Biller: code,
+            ...(meterType ? { 'Meter Type': meterType } : {}),
             ...(cat === 'DATA' ? { 'Data Plan': planLabel } : { Category: cat }),
             'Customer ID': cust,
             'Amount Paid': formatNgn(amt),
@@ -2515,15 +3179,17 @@
           recordAndOpenInvoice({
             ...(refId ? { id: refId } : {}),
             type: 'BILL_PAYMENT',
-            title: cat === 'DATA' ? `${planLabel}` : `${code} ${cat} Paid`,
+            title: cat === 'DATA' ? `${planLabel}` : `${code} ${meterType || cat} Paid`,
             subtitle: token ? `Meter ${cust} • Token: ${token}` : `ID: ${cust} • ${planLabel}`,
             amountText: `-${formatNgn(amt)}`,
             invoice: inv,
           });
           showToast(`Bill processed via Render (${refId || 'OK'}).`, 'success');
         } catch (err) {
-          setBillDiagnostic(`Network error calling /api/bills/pay: ${err.message || err}`);
-          showToast(err.message || 'Network error processing bill payment.', 'error');
+          const netMsg = err.message || 'Network error processing bill payment.';
+          showBillErrorBanner(netMsg);
+          setBillDiagnostic(`Network error calling /api/bills/pay: ${netMsg}`);
+          showToast(netMsg, 'error');
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
@@ -2838,6 +3504,8 @@
       handleKycTierChange();
       handleExtDirectionChange();
       updateP2pCurrencyLabels();
+      renderWithdrawalBankOptions();
+      fetchLiveNigerianBanks();
       setBillCategory(appState.ui.billCategory || 'DATA');
       setTradeSide(appState.ui.tradeSide || 'buy');
       setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
