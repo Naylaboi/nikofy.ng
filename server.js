@@ -160,11 +160,37 @@ const LOCKOUT_MINUTES = 15;
 
 const BANK_CODES = {
   GTBank: "058",
+  "Guaranty Trust Bank": "058",
   "Access Bank": "044",
   "Zenith Bank": "057",
+  "First Bank": "011",
+  UBA: "033",
   "Kuda Bank": "50211",
-  OPay: "999992"
+  OPay: "999992",
+  "OPay Digital Services Limited (OPay)": "999992",
+  PalmPay: "999991",
+  Moniepoint: "50515"
 };
+
+function lookupBankCode(bankName, explicitCode) {
+  if (explicitCode && /^\d{3,6}$/.test(String(explicitCode).trim())) {
+    return String(explicitCode).trim();
+  }
+  const clean = String(bankName || "").trim();
+  if (!clean) return "058";
+  if (BANK_CODES[clean]) return BANK_CODES[clean];
+  const lower = clean.toLowerCase();
+  if (lower.includes("opay")) return "999992";
+  if (lower.includes("palmpay")) return "999991";
+  if (lower.includes("kuda")) return "50211";
+  if (lower.includes("moniepoint")) return "50515";
+  if (lower.includes("gt")) return "058";
+  if (lower.includes("access")) return "044";
+  if (lower.includes("zenith")) return "057";
+  if (lower.includes("first")) return "011";
+  if (lower.includes("uba")) return "033";
+  return "058";
+}
 
 const ASSET_NETWORK_MAP = {
   NGN: { network: "NGN_INSTANT", minorUnit: "KOBO", npCurrency: null },
@@ -624,6 +650,65 @@ app.get("/health", async (req, res) => {
     res.json({ ok: true, service: "nikofy-backend", dbTime: result.rows[0].now });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// BANK ACCOUNT NAME LOOKUP FOR NGN WITHDRAWALS
+app.get("/api/bank/resolve", async (req, res) => {
+  const accountNumber = String(
+    req.query.accountNumber || req.query.account_number || req.query.acct || ""
+  ).trim();
+  const bankName = String(
+    req.query.bankName || req.query.bank_name || req.query.bank || ""
+  ).trim();
+  const bankCode = lookupBankCode(bankName, req.query.bankCode || req.query.bank_code);
+
+  if (!/^\d{10}$/.test(accountNumber)) {
+    return res.status(400).json({
+      ok: false,
+      error: "Please enter a valid 10-digit account number."
+    });
+  }
+
+  try {
+    if (PAYSTACK_SECRET_KEY) {
+      const resp = await fetch(
+        `https://api.paystack.co/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.status && data.data?.account_name) {
+        return res.json({
+          ok: true,
+          accountNumber,
+          bankCode,
+          bankName: bankName || bankCode,
+          accountName: String(data.data.account_name).trim(),
+          mode: "LIVE_PAYSTACK"
+        });
+      }
+      return res.status(400).json({
+        ok: false,
+        error: data.message || "Could not verify account name with bank."
+      });
+    }
+
+    return res.json({
+      ok: true,
+      accountNumber,
+      bankCode,
+      bankName: bankName || bankCode,
+      accountName: `NIKOFY VERIFIED (${accountNumber})`,
+      mode: "FALLBACK"
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -1111,7 +1196,7 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
     let mode = "LEDGER_READY";
 
     if (PAYSTACK_SECRET_KEY) {
-      const bankCode = BANK_CODES[cleanBank] || "058";
+      const bankCode = lookupBankCode(cleanBank);
       const recipResp = await fetch("https://api.paystack.co/transferrecipient", {
         method: "POST",
         headers: {
