@@ -40,6 +40,103 @@ const VTPASS_API_KEY = process.env.VTPASS_API_KEY || "";
 const VTPASS_SECRET_KEY = process.env.VTPASS_SECRET_KEY || "";
 const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL || "https://api-service.vtpass.com/api";
 
+const VTPASS_SERVICE_MAP = {
+  AIRTIME: {
+    MTN: "mtn",
+    AIRTEL: "airtel",
+    GLO: "glo",
+    "9MOBILE": "etisalat"
+  },
+  DATA: {
+    MTN: "mtn-data",
+    AIRTEL: "airtel-data",
+    GLO: "glo-data",
+    "9MOBILE": "etisalat-data"
+  }
+};
+
+function getVtpassRequestId() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(new Date());
+
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  const suffix = crypto.randomBytes(4).toString("hex");
+  return `${map.year}${map.month}${map.day}${map.hour}${map.minute}${suffix}`;
+}
+
+async function resolveVtpassDataVariation({ serviceID, planLabel, variationCode, amountNaira }) {
+  if (variationCode && String(variationCode).trim()) {
+    return {
+      variationCode: String(variationCode).trim(),
+      variationAmountNaira: amountNaira
+    };
+  }
+
+  const resp = await fetch(
+    `${VTPASS_BASE_URL}/service-variations?serviceID=${encodeURIComponent(serviceID)}`,
+    {
+      method: "GET",
+      headers: {
+        "api-key": VTPASS_API_KEY,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  const data = await resp.json().catch(() => ({}));
+  const variations = Array.isArray(data?.content?.variations) ? data.content.variations : [];
+  if (!resp.ok || !variations.length) {
+    return null;
+  }
+
+  const normalizedLabel = String(planLabel || "").toLowerCase();
+  const sizeMatch = normalizedLabel.match(/(\d+(?:\.\d+)?)\s*(gb|mb)/i);
+  const targetVolume = sizeMatch ? `${sizeMatch[1]}${sizeMatch[2].toLowerCase()}` : null;
+
+  if (targetVolume) {
+    const byVolumeAndPrice = variations.find((v) => {
+      const vName = String(v.name || "").toLowerCase().replace(/\s+/g, "");
+      const vAmt = Number(v.variation_amount || 0);
+      return vName.includes(targetVolume) && (!amountNaira || Math.abs(vAmt - amountNaira) <= 100);
+    });
+    if (byVolumeAndPrice) {
+      return {
+        variationCode: String(byVolumeAndPrice.variation_code),
+        variationAmountNaira: Number(byVolumeAndPrice.variation_amount || amountNaira)
+      };
+    }
+
+    const byVolume = variations.find((v) =>
+      String(v.name || "").toLowerCase().replace(/\s+/g, "").includes(targetVolume)
+    );
+    if (byVolume) {
+      return {
+        variationCode: String(byVolume.variation_code),
+        variationAmountNaira: Number(byVolume.variation_amount || amountNaira)
+      };
+    }
+  }
+
+  if (amountNaira > 0) {
+    const byPrice = variations.find((v) => Number(v.variation_amount || 0) === amountNaira);
+    if (byPrice) {
+      return {
+        variationCode: String(byPrice.variation_code),
+        variationAmountNaira: Number(byPrice.variation_amount || amountNaira)
+      };
+    }
+  }
+
+  return null;
+}
+
 if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
 } else {
@@ -1096,9 +1193,56 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
   }
 });
 
-// LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT
+// OPTIONAL HELPER ENDPOINT: FETCH LIVE VTPASS VARIATIONS (e.g. DATA PLANS)
+app.get("/api/bills/variations", requireAuth, async (req, res) => {
+  const cleanCat = String(req.query.category || "DATA").trim().toUpperCase();
+  const cleanProv = String(req.query.providerCode || "").trim().toUpperCase();
+  const serviceID = VTPASS_SERVICE_MAP[cleanCat]?.[cleanProv] || String(req.query.serviceID || "").trim();
+
+  if (!serviceID) {
+    return res.status(400).json({ ok: false, error: "Valid category and providerCode (or serviceID) are required." });
+  }
+  if (!VTPASS_API_KEY) {
+    return res.status(503).json({ ok: false, error: "VTPASS_API_KEY is not configured on the server." });
+  }
+
+  try {
+    const resp = await fetch(
+      `${VTPASS_BASE_URL}/service-variations?serviceID=${encodeURIComponent(serviceID)}`,
+      {
+        method: "GET",
+        headers: {
+          "api-key": VTPASS_API_KEY,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return res.status(502).json({ ok: false, error: data.response_description || "Failed to load variations." });
+    }
+    return res.json({
+      ok: true,
+      serviceID,
+      variations: Array.isArray(data?.content?.variations) ? data.content.variations : []
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT (VTPASS)
 app.post("/api/bills/pay", requireAuth, async (req, res) => {
-  const { category = "DATA", providerCode, customerId, amountKobo, passcode, planLabel = null } = req.body || {};
+  const {
+    category = "DATA",
+    providerCode,
+    customerId,
+    amountKobo,
+    passcode,
+    planLabel = null,
+    variationCode = null
+  } = req.body || {};
+
   const cleanCat = String(category || "DATA").trim().toUpperCase();
   const cleanProv = String(providerCode || "").trim().toUpperCase();
   const cleanCust = String(customerId || "").trim();
@@ -1154,18 +1298,40 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Insufficient NGN balance for bill payment." });
     }
 
-    const reference = `BILL_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    const reference = getVtpassRequestId();
     let providerRef = reference;
     let tokenCode = cleanCat === "ELECTRICITY"
       ? `${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}`
       : null;
 
     if (VTPASS_API_KEY && VTPASS_SECRET_KEY) {
-      const vtServiceMap = {
-        AIRTIME: { MTN: "mtn", AIRTEL: "airtel", GLO: "glo", "9MOBILE": "etisalat" },
-        DATA: { MTN: "mtn-data", AIRTEL: "airtel-data", GLO: "glo-data", "9MOBILE": "etisalat-data" },
+      const serviceID = VTPASS_SERVICE_MAP[cleanCat]?.[cleanProv] || cleanProv.toLowerCase();
+      const amountNaira = Number((amount / 100).toFixed(2));
+      const payload = {
+        request_id: reference,
+        serviceID,
+        billersCode: cleanCust,
+        phone: cleanCust,
+        amount: amountNaira
       };
-      const serviceID = vtServiceMap[cleanCat]?.[cleanProv] || cleanProv.toLowerCase();
+
+      if (cleanCat === "DATA") {
+        const resolvedPlan = await resolveVtpassDataVariation({
+          serviceID,
+          planLabel: cleanPlanLabel,
+          variationCode,
+          amountNaira
+        });
+        if (!resolvedPlan?.variationCode) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            ok: false,
+            error: "Could not match data bundle to a VTpass variation_code. Pass variationCode or select a supported plan."
+          });
+        }
+        payload.variation_code = resolvedPlan.variationCode;
+        payload.amount = Number(resolvedPlan.variationAmountNaira || amountNaira);
+      }
 
       const vtResp = await fetch(`${VTPASS_BASE_URL}/pay`, {
         method: "POST",
@@ -1174,20 +1340,23 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
           "secret-key": VTPASS_SECRET_KEY,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          request_id: reference,
-          serviceID,
-          billersCode: cleanCust,
-          phone: cleanCust,
-          amount: Math.round(amount / 100)
-        })
+        body: JSON.stringify(payload)
       });
       const vtData = await vtResp.json().catch(() => ({}));
-      if (!vtResp.ok || (vtData.code && vtData.code !== "000")) {
+      const txStatus = String(vtData?.content?.transactions?.status || "delivered").toLowerCase();
+      const succeeded = vtResp.ok && vtData.code === "000" && ["delivered", "pending"].includes(txStatus);
+
+      if (!succeeded) {
         await client.query("ROLLBACK");
         return res.status(502).json({ ok: false, error: vtData.response_description || "Bill provider failed." });
       }
-      providerRef = String(vtData.requestId || vtData.transactionId || reference);
+
+      providerRef = String(
+        vtData?.content?.transactions?.transactionId ||
+        vtData.requestId ||
+        vtData.transactionId ||
+        reference
+      );
       if (vtData.purchased_code) {
         tokenCode = String(vtData.purchased_code);
       }
