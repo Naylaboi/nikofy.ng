@@ -55,6 +55,17 @@ const VTPASS_SERVICE_MAP = {
   }
 };
 
+function buildVtpassHeaders() {
+  const headers = {
+    "api-key": VTPASS_API_KEY,
+    "Content-Type": "application/json"
+  };
+  if (VTPASS_SECRET_KEY) {
+    headers["secret-key"] = VTPASS_SECRET_KEY;
+  }
+  return headers;
+}
+
 function getVtpassRequestId() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Lagos",
@@ -83,10 +94,7 @@ async function resolveVtpassDataVariation({ serviceID, planLabel, variationCode,
     `${VTPASS_BASE_URL}/service-variations?serviceID=${encodeURIComponent(serviceID)}`,
     {
       method: "GET",
-      headers: {
-        "api-key": VTPASS_API_KEY,
-        "Content-Type": "application/json"
-      }
+      headers: buildVtpassHeaders()
     }
   );
 
@@ -143,10 +151,10 @@ if (SENDGRID_API_KEY) {
   console.warn("SENDGRID_API_KEY is not set; OTP emails will fail until configured.");
 }
 
-const NGN_FLAT_FEE_KOBO = 3000; // ₦30.00
-const CRYPTO_HIGH_TIER_THRESHOLD_CENTS = 100000; // $1,000.00 and above
-const CRYPTO_LOW_TIER_FEE_CENTS = 40; // $0.40 service fee for transactions < $1,000.00
-const CRYPTO_HIGH_TIER_FEE_CENTS = 80; // $0.80 service fee for transactions >= $1,000.00
+const NGN_FLAT_FEE_KOBO = 3000;
+const CRYPTO_HIGH_TIER_THRESHOLD_CENTS = 100000;
+const CRYPTO_LOW_TIER_FEE_CENTS = 40;
+const CRYPTO_HIGH_TIER_FEE_CENTS = 80;
 const MAX_PASSCODE_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
@@ -723,7 +731,6 @@ app.get("/api/users/lookup", requireAuth, async (req, res) => {
   }
 });
 
-// 100% FREE IN-APP P2P TRANSFER (NGN & CRYPTO — ZERO PLATFORM FEE & ZERO GAS FEE)
 app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
   const { recipientUsername, asset = "NGN", amountMinor, passcode, note = null } = req.body || {};
   const cleanRecipient = normalizeUsername(recipientUsername);
@@ -916,7 +923,6 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
   }
 });
 
-// LIVE NGN DEPOSIT VERIFICATION VIA PAYSTACK
 app.post("/api/ngn/deposit/verify", requireAuth, async (req, res) => {
   const { reference } = req.body || {};
   const cleanRef = String(reference || "").trim();
@@ -1042,7 +1048,6 @@ app.post("/api/ngn/deposit/verify", requireAuth, async (req, res) => {
   }
 });
 
-// LIVE NGN BANK WITHDRAWAL (₦30 FLAT FEE + PAYSTACK TRANSFER WHEN CONFIGURED)
 app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
   const { bankName, accountNumber, amountKobo, passcode } = req.body || {};
   const cleanBank = String(bankName || "").trim();
@@ -1193,7 +1198,6 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
   }
 });
 
-// OPTIONAL HELPER ENDPOINT: FETCH LIVE VTPASS VARIATIONS (e.g. DATA PLANS)
 app.get("/api/bills/variations", requireAuth, async (req, res) => {
   const cleanCat = String(req.query.category || "DATA").trim().toUpperCase();
   const cleanProv = String(req.query.providerCode || "").trim().toUpperCase();
@@ -1211,10 +1215,7 @@ app.get("/api/bills/variations", requireAuth, async (req, res) => {
       `${VTPASS_BASE_URL}/service-variations?serviceID=${encodeURIComponent(serviceID)}`,
       {
         method: "GET",
-        headers: {
-          "api-key": VTPASS_API_KEY,
-          "Content-Type": "application/json"
-        }
+        headers: buildVtpassHeaders()
       }
     );
     const data = await resp.json().catch(() => ({}));
@@ -1231,7 +1232,7 @@ app.get("/api/bills/variations", requireAuth, async (req, res) => {
   }
 });
 
-// LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT (VTPASS)
+// LIVE DATA, AIRTIME, ELECTRICITY & CABLE TV BILL PAYMENT (VTPASS_API_KEY + optional VTPASS_SECRET_KEY)
 app.post("/api/bills/pay", requireAuth, async (req, res) => {
   const {
     category = "DATA",
@@ -1269,6 +1270,12 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
   }
   if (["DATA", "AIRTIME"].includes(cleanCat) && !/^0[789][01]\d{8}$/.test(cleanCust)) {
     return res.status(400).json({ ok: false, error: "Enter a valid 11-digit Nigerian mobile number." });
+  }
+  if (!VTPASS_API_KEY) {
+    return res.status(503).json({
+      ok: false,
+      error: "VTPASS_API_KEY is not configured on Render. Add VTPASS_API_KEY before paying bills."
+    });
   }
 
   const userId = Number(req.auth.sub);
@@ -1314,68 +1321,62 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
     }
 
     const reference = getVtpassRequestId();
-    let providerRef = reference;
-    let tokenCode = cleanCat === "ELECTRICITY"
-      ? `${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}`
-      : null;
+    const serviceID = VTPASS_SERVICE_MAP[cleanCat]?.[cleanProv] || cleanProv.toLowerCase();
+    const amountNaira = Number((amount / 100).toFixed(2));
+    const payload = {
+      request_id: reference,
+      serviceID,
+      billersCode: cleanCust,
+      phone: cleanCust,
+      amount: amountNaira
+    };
 
-    if (VTPASS_API_KEY && VTPASS_SECRET_KEY) {
-      const serviceID = VTPASS_SERVICE_MAP[cleanCat]?.[cleanProv] || cleanProv.toLowerCase();
-      const amountNaira = Number((amount / 100).toFixed(2));
-      const payload = {
-        request_id: reference,
+    if (cleanCat === "DATA") {
+      const resolvedPlan = await resolveVtpassDataVariation({
         serviceID,
-        billersCode: cleanCust,
-        phone: cleanCust,
-        amount: amountNaira
-      };
-
-      if (cleanCat === "DATA") {
-        const resolvedPlan = await resolveVtpassDataVariation({
-          serviceID,
-          planLabel: cleanPlanLabel,
-          variationCode,
-          amountNaira
-        });
-        if (!resolvedPlan?.variationCode) {
-          await client.query("ROLLBACK");
-          return res.status(400).json({
-            ok: false,
-            error: "Could not match data bundle to a VTpass variation_code. Pass variationCode or select a supported plan."
-          });
-        }
-        payload.variation_code = resolvedPlan.variationCode;
-        payload.amount = Number(resolvedPlan.variationAmountNaira || amountNaira);
-      }
-
-      const vtResp = await fetch(`${VTPASS_BASE_URL}/pay`, {
-        method: "POST",
-        headers: {
-          "api-key": VTPASS_API_KEY,
-          "secret-key": VTPASS_SECRET_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
+        planLabel: cleanPlanLabel,
+        variationCode,
+        amountNaira
       });
-      const vtData = await vtResp.json().catch(() => ({}));
-      const txStatus = String(vtData?.content?.transactions?.status || "delivered").toLowerCase();
-      const succeeded = vtResp.ok && vtData.code === "000" && ["delivered", "pending"].includes(txStatus);
-
-      if (!succeeded) {
+      if (!resolvedPlan?.variationCode) {
         await client.query("ROLLBACK");
-        return res.status(502).json({ ok: false, error: vtData.response_description || "Bill provider failed." });
+        return res.status(400).json({
+          ok: false,
+          error: "Could not match data bundle to a VTpass variation_code. Pass variationCode or select a supported plan."
+        });
       }
-
-      providerRef = String(
-        vtData?.content?.transactions?.transactionId ||
-        vtData.requestId ||
-        vtData.transactionId ||
-        reference
-      );
-      if (vtData.purchased_code) {
-        tokenCode = String(vtData.purchased_code);
-      }
+      payload.variation_code = resolvedPlan.variationCode;
+      payload.amount = Number(resolvedPlan.variationAmountNaira || amountNaira);
     }
+
+    const vtResp = await fetch(`${VTPASS_BASE_URL}/pay`, {
+      method: "POST",
+      headers: buildVtpassHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const vtData = await vtResp.json().catch(() => ({}));
+    const txStatus = String(vtData?.content?.transactions?.status || "delivered").toLowerCase();
+    const succeeded = vtResp.ok && vtData.code === "000" && ["delivered", "pending"].includes(txStatus);
+
+    if (!succeeded) {
+      await client.query("ROLLBACK");
+      return res.status(502).json({
+        ok: false,
+        error: vtData.response_description || vtData.message || "Bill provider failed."
+      });
+    }
+
+    const providerRef = String(
+      vtData?.content?.transactions?.transactionId ||
+      vtData.requestId ||
+      vtData.transactionId ||
+      reference
+    );
+    const tokenCode = vtData.purchased_code
+      ? String(vtData.purchased_code)
+      : (cleanCat === "ELECTRICITY"
+        ? `${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}`
+        : null);
 
     const nextBalance = Number(wallet.balance_minor) - amount;
     await client.query(
@@ -1418,7 +1419,6 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
   }
 });
 
-// USER TRANSACTION LEDGER
 app.get("/api/ledger", requireAuth, async (req, res) => {
   const userId = Number(req.auth.sub);
   try {
@@ -2755,14 +2755,14 @@ app.use((err, req, res, next) => {
     return res.status(413).json({
       ok: false,
       status: "FAILED",
-      error: "Selfie image payload is too large. Please try a smaller photo."
+      error: "Request payload is too large. Please try a smaller file or body."
     });
   }
   console.error("Unhandled Express error:", err);
   return res.status(err?.status || 500).json({
     ok: false,
     status: "FAILED",
-    error: "Server error while verifying KYC."
+    error: err?.message || "Internal server error."
   });
 });
 
