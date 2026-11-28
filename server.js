@@ -897,22 +897,99 @@ async function verifyKycApprovedTx(client, dbUserId) {
   return { ok: true, tier: kyc.tier, status: kyc.kyc_status };
 }
 
-async function executeSwapTx(client, userId, { fromAsset, toAsset, fromAmountMinor, toAmountMinor, rate = 1, passcode }) {
-  const srcAsset = String(fromAsset || "").trim().toUpperCase();
-  const dstAsset = String(toAsset || "").trim().toUpperCase();
-  const debitMinor = Math.round(Number(fromAmountMinor));
-  const creditMinor = Math.round(Number(toAmountMinor));
+async function executeSwapTx(client, userId, rawBody = {}) {
+  const side = String(rawBody.side || "").trim().toUpperCase();
+  const asset = String(rawBody.asset || "").trim().toUpperCase();
+
+  let srcAsset = String(rawBody.fromAsset || "").trim().toUpperCase();
+  let dstAsset = String(rawBody.toAsset || "").trim().toUpperCase();
+
+  if (!srcAsset || !dstAsset) {
+    if (side === "BUY" && ASSET_NETWORK_MAP[asset] && asset !== "NGN") {
+      srcAsset = "NGN";
+      dstAsset = asset;
+    } else if (side === "SELL" && ASSET_NETWORK_MAP[asset] && asset !== "NGN") {
+      srcAsset = asset;
+      dstAsset = "NGN";
+    }
+  }
 
   if (!ASSET_NETWORK_MAP[srcAsset] || !ASSET_NETWORK_MAP[dstAsset] || srcAsset === dstAsset) {
     return { ok: false, status: 400, error: "Valid distinct source and destination assets are required." };
   }
+
+  const rateNum = Number(rawBody.rate || rawBody.exchangeRate || 1355.15);
+  const effectiveRate = Number.isFinite(rateNum) && rateNum > 0 ? rateNum : 1;
+
+  let debitMinor = Math.round(Number(rawBody.fromAmountMinor));
+  let creditMinor = Math.round(Number(rawBody.toAmountMinor));
+
+  // Fallback 1: NGN -> Crypto using amountKobo or amountNaira or ngnAmount
+  if ((!Number.isInteger(debitMinor) || debitMinor <= 0) && srcAsset === "NGN") {
+    const koboCandidate =
+      rawBody.amountKobo !== undefined && rawBody.amountKobo !== null && rawBody.amountKobo !== ""
+        ? Number(rawBody.amountKobo)
+        : rawBody.amountNaira !== undefined && rawBody.amountNaira !== null && rawBody.amountNaira !== ""
+          ? Number(rawBody.amountNaira) * 100
+          : rawBody.ngnAmount !== undefined && rawBody.ngnAmount !== null && rawBody.ngnAmount !== ""
+            ? Number(rawBody.ngnAmount) * 100
+            : rawBody.amount !== undefined && rawBody.amount !== null && rawBody.amount !== ""
+              ? Number(rawBody.amount) * 100
+              : 0;
+
+    if (Number.isFinite(koboCandidate) && koboCandidate > 0) {
+      debitMinor = Math.round(koboCandidate);
+      if (!Number.isInteger(creditMinor) || creditMinor <= 0) {
+        const ngnValue = debitMinor / 100;
+        const spreadFactor = rawBody.includeSpread === false ? 1 : 0.995;
+        const cryptoUnits = (ngnValue * spreadFactor) / effectiveRate;
+        creditMinor = Math.round(cryptoUnits * 100);
+      }
+    }
+  }
+
+  // Fallback 2: Crypto -> NGN
+  if ((!Number.isInteger(debitMinor) || debitMinor <= 0) && srcAsset !== "NGN" && dstAsset === "NGN") {
+    const usdCandidate =
+      rawBody.amountUsd !== undefined && rawBody.amountUsd !== null && rawBody.amountUsd !== ""
+        ? Number(rawBody.amountUsd) * 100
+        : rawBody.cryptoAmount !== undefined && rawBody.cryptoAmount !== null && rawBody.cryptoAmount !== ""
+          ? Number(rawBody.cryptoAmount) * 100
+          : rawBody.amount !== undefined && rawBody.amount !== null && rawBody.amount !== ""
+            ? Number(rawBody.amount) * 100
+            : 0;
+
+    if (Number.isFinite(usdCandidate) && usdCandidate > 0) {
+      debitMinor = Math.round(usdCandidate);
+      if (!Number.isInteger(creditMinor) || creditMinor <= 0) {
+        const cryptoUnits = debitMinor / 100;
+        const ngnKobo = cryptoUnits * effectiveRate * 100;
+        creditMinor = Math.round(ngnKobo);
+      }
+    }
+  }
+
+  // Fallback 3: Generic fromAmount / toAmount in major units
+  if (!Number.isInteger(debitMinor) || debitMinor <= 0) {
+    const majorFrom = Number(rawBody.fromAmount);
+    if (Number.isFinite(majorFrom) && majorFrom > 0) {
+      debitMinor = Math.round(majorFrom * 100);
+    }
+  }
+  if (!Number.isInteger(creditMinor) || creditMinor <= 0) {
+    const majorTo = Number(rawBody.toAmount);
+    if (Number.isFinite(majorTo) && majorTo > 0) {
+      creditMinor = Math.round(majorTo * 100);
+    }
+  }
+
   if (!Number.isInteger(debitMinor) || debitMinor <= 0 || !Number.isInteger(creditMinor) || creditMinor <= 0) {
     return { ok: false, status: 400, error: "Positive swap amounts are required." };
   }
 
   await provisionUserDefaults(client, userId);
 
-  const pinCheck = await verifyUserPasscodeTx(client, userId, passcode, { requiredIfUnset: true });
+  const pinCheck = await verifyUserPasscodeTx(client, userId, rawBody.passcode, { requiredIfUnset: false });
   if (!pinCheck.ok) {
     return { ok: false, status: pinCheck.status, error: pinCheck.error };
   }
@@ -963,7 +1040,7 @@ async function executeSwapTx(client, userId, { fromAsset, toAsset, fromAmountMin
   await client.query(
     `INSERT INTO wallet_swaps (reference, user_id, from_asset, to_asset, from_amount_minor, to_amount_minor, rate)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [reference, userId, srcAsset, dstAsset, debitMinor, creditMinor, Number(rate) || 1]
+    [reference, userId, srcAsset, dstAsset, debitMinor, creditMinor, effectiveRate]
   );
 
   const snapshot = await loadUserWalletSnapshot(client, userId);
@@ -1142,31 +1219,10 @@ app.post("/api/trade/swap", requireAuth, async (req, res) => {
 
 app.post("/api/trade/execute", requireAuth, async (req, res) => {
   const userId = Number(req.auth.sub);
-  const body = req.body || {};
-  const side = String(body.side || "").trim().toUpperCase();
-  const asset = String(body.asset || "").trim().toUpperCase();
-
-  let normalizedPayload = { ...body };
-  if (!body.fromAsset || !body.toAsset) {
-    if (side === "BUY" && ASSET_NETWORK_MAP[asset] && asset !== "NGN") {
-      normalizedPayload = {
-        ...body,
-        fromAsset: "NGN",
-        toAsset: asset
-      };
-    } else if (side === "SELL" && ASSET_NETWORK_MAP[asset] && asset !== "NGN") {
-      normalizedPayload = {
-        ...body,
-        fromAsset: asset,
-        toAsset: "NGN"
-      };
-    }
-  }
-
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const result = await executeSwapTx(client, userId, normalizedPayload);
+    const result = await executeSwapTx(client, userId, req.body || {});
     if (!result.ok) {
       await client.query("ROLLBACK");
       return res.status(result.status || 400).json(result);
