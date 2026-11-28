@@ -555,7 +555,7 @@
         <div id="panel-ext-crypto" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
             <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">External Crypto Send &amp; Receive</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">External transfer fee: <strong class="text-amber-600 dark:text-amber-400">$0.40</strong> below $1,000 or <strong class="text-amber-600 dark:text-amber-400">$0.80</strong> at $1,000+ (plus gas on external send).</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">External transfer fee: <strong class="text-amber-600 dark:text-amber-400">$0.40</strong> below $1,000 or <strong class="text-amber-600 dark:text-amber-400">$0.80</strong> at $1,000+ (plus gas &amp; 6-digit Authenticator 2FA on send).</p>
           </div>
 
           <div class="grid grid-cols-3 gap-3">
@@ -664,12 +664,12 @@
           </form>
         </div>
 
-        <!-- 3D: NGN BANK WITHDRAWAL (ALL NIGERIAN COMMERCIAL & MFB BANKS + SEARCH + ACCOUNT NAME VERIFY) -->
+        <!-- 3D: NGN BANK WITHDRAWAL (ALL NIGERIAN COMMERCIAL & MFB BANKS + SEARCH + ACCOUNT NAME VERIFY + 2FA) -->
         <div id="panel-withdraw" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between gap-2">
             <div>
               <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Withdraw to Nigerian Bank</h2>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Search commercial or microfinance banks, verify account name, then enter amount (<strong class="text-amber-600 dark:text-amber-400">₦30 flat fee</strong>).</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Search commercial or microfinance banks, verify account name, then authorize with Passcode &amp; 2FA (<strong class="text-amber-600 dark:text-amber-400">₦30 flat fee</strong>).</p>
             </div>
             <span id="bank-count-badge" class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-nikofy-green/15 text-nikofy-green dark:text-emerald-400 border border-nikofy-green/30 shrink-0 tabular-nums">Loading banks...</span>
           </div>
@@ -719,7 +719,7 @@
               <label for="withdraw-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">3. Amount (NGN)</label>
               <input id="withdraw-amount" type="number" min="1000" step="100" required placeholder="25000"
                 class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-lg font-extrabold text-slate-900 dark:text-white tabular-nums outline-none" />
-              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Fee: ₦30.00 flat &bull; Subject to KYC daily limit</p>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Fee: ₦30.00 flat &bull; Requires Verified KYC &amp; Google Authenticator 2FA</p>
             </div>
 
             <button id="btn-withdraw-submit" type="submit" disabled
@@ -910,11 +910,11 @@
           </div>
 
           <!-- Google Authenticator 2FA Setup -->
-          <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
+          <div id="settings-2fa-card" class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Google Authenticator 2FA</h3>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Protect logins, withdrawals &amp; external crypto transfers with a 6-digit TOTP code</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Required for bank withdrawals &amp; external crypto payouts with a 6-digit TOTP code</p>
               </div>
               <span id="twofa-status-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Disabled</span>
             </div>
@@ -1002,7 +1002,7 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODALS: ITEMIZED INVOICE, PASSCODE & KYC TIER / LIVENESS SCAN        -->
+  <!-- MODALS: ITEMIZED INVOICE, PASSCODE, 2FA TOTP & KYC / LIVENESS SCAN    -->
   <!-- ===================================================================== -->
 
   <!-- Itemized Nikofy.ng Invoice Modal -->
@@ -1072,6 +1072,34 @@
         </div>
         <button type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
           Verify &amp; Execute Transaction
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 6-Digit Google Authenticator 2FA Prompt Modal (Bank Withdrawals & External Crypto Payouts) -->
+  <div id="modal-verify-totp" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">2FA Security Check</span>
+        <button type="button" onclick="cancelPendingTotpFlow()" class="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
+      </div>
+      <div>
+        <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Google Authenticator Code</h3>
+        <p id="verify-totp-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Enter the 6-digit code from Google Authenticator to authorize this payout.</p>
+      </div>
+      <form onsubmit="submitVerifyTotpModal(event)" class="space-y-4">
+        <div>
+          <label for="verify-modal-totp-input" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">6-Digit Authenticator Code</label>
+          <input id="verify-modal-totp-input" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required placeholder="000000"
+            class="w-full bg-slate-50 dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder focus:border-nikofy-green rounded-xl px-4 py-3 text-center text-2xl font-extrabold tracking-[0.45em] text-slate-900 dark:text-white tabular-nums outline-none" />
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+          <span>Enforced for Bank Out &amp; External Crypto</span>
+          <button type="button" onclick="goTo2FASettingsFromModal()" class="font-bold text-nikofy-green dark:text-emerald-400 hover:underline">2FA Settings</button>
+        </div>
+        <button id="btn-submit-totp-modal" type="submit" class="w-full py-3 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white text-xs font-extrabold transition">
+          Verify 2FA &amp; Complete Payout
         </button>
       </form>
     </div>
@@ -1495,6 +1523,7 @@
     let captchaAnswers = { signin: 11, signup: 11 };
     let otpTimer = null;
     let pendingTransactionAction = null;
+    let pendingTotpAction = null;
 
     // =====================================================================
     // WITHDRAWAL BANK SEARCH + ACCOUNT NAME VERIFICATION
@@ -1834,6 +1863,9 @@
           }
           appState.user.frozen = data.user.accountStatus === 'FROZEN';
           appState.user.kycTier = data.user.kycTier || appState.user.kycTier;
+          if (data.user.kycStatus) {
+            appState.user.kycStatus = data.user.kycStatus;
+          }
           if (typeof data.user.totpEnabled === 'boolean') {
             appState.user.twoFactorEnabled = data.user.totpEnabled;
           }
@@ -1984,6 +2016,80 @@
       closeModal('modal-setup-passcode');
       closeModal('modal-verify-passcode');
       showToast('Transaction cancelled.', 'info');
+    }
+
+    // =====================================================================
+    // 6-DIGIT GOOGLE AUTHENTICATOR 2FA PROMPT FOR WITHDRAWALS & PAYOUTS
+    // =====================================================================
+    function requestAuthenticator2FA(summaryText, onVerified) {
+      if (!appState.user.twoFactorEnabled) {
+        showToast('Enable Google Authenticator 2FA in Settings before withdrawing to a bank or external wallet.', 'error');
+        navigateTo('settings');
+        const card = document.getElementById('settings-2fa-card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      pendingTotpAction = { summaryText, onVerified };
+      document.getElementById('verify-totp-summary').textContent = summaryText
+        ? `Enter your 6-digit Google Authenticator code to authorize: ${summaryText}`
+        : 'Enter the 6-digit code from Google Authenticator to proceed.';
+      const input = document.getElementById('verify-modal-totp-input');
+      input.value = '';
+      document.getElementById('modal-verify-totp').classList.remove('hidden');
+      input.focus();
+    }
+
+    async function submitVerifyTotpModal(e) {
+      e.preventDefault();
+      const input = document.getElementById('verify-modal-totp-input');
+      const submitBtn = document.getElementById('btn-submit-totp-modal');
+      const code = (input?.value || '').trim();
+
+      if (!/^[0-9]{6}$/.test(code)) {
+        return showToast('Enter a valid 6-digit Google Authenticator code.', 'error');
+      }
+
+      const action = pendingTotpAction;
+      if (!action || typeof action.onVerified !== 'function') {
+        closeModal('modal-verify-totp');
+        return;
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verifying 2FA...';
+      }
+
+      try {
+        const succeeded = await action.onVerified(code);
+        if (succeeded !== false) {
+          pendingTotpAction = null;
+          closeModal('modal-verify-totp');
+        } else if (input) {
+          input.value = '';
+          input.focus();
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Verify 2FA & Complete Payout';
+        }
+      }
+    }
+
+    function cancelPendingTotpFlow() {
+      pendingTotpAction = null;
+      closeModal('modal-verify-totp');
+      showToast('2FA verification cancelled.', 'info');
+    }
+
+    function goTo2FASettingsFromModal() {
+      pendingTotpAction = null;
+      closeModal('modal-verify-totp');
+      navigateTo('settings');
+      const card = document.getElementById('settings-2fa-card');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     async function handleSettingsPasscodeUpdate(e) {
@@ -2859,9 +2965,18 @@
         return showToast(`Insufficient ${balKey} balance (need $${totalUsd.toFixed(2)} incl. $${svcFee.toFixed(2)} fee + gas).`, 'error');
       }
 
-      authorizeTransactionWithPasscode(
-        `Send $${amountUsd.toFixed(2)} ${asset} (${net}) • Fee $${svcFee.toFixed(2)} + Gas $${gasUsd.toFixed(2)}`,
-        async (verifiedPin) => {
+      if (!appState.user.twoFactorEnabled) {
+        showToast('Enable Google Authenticator 2FA in Settings before sending external crypto.', 'error');
+        navigateTo('settings');
+        const card = document.getElementById('settings-2fa-card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      const summaryText = `Send $${amountUsd.toFixed(2)} ${asset} (${net}) • Fee $${svcFee.toFixed(2)} + Gas $${gasUsd.toFixed(2)}`;
+
+      authorizeTransactionWithPasscode(summaryText, (verifiedPin) => {
+        requestAuthenticator2FA(summaryText, async (totpCode) => {
           const amountMinor = Math.round(amountUsd * 100);
           const gasFeeMinor = Math.round(gasUsd * 100);
           let refId = null;
@@ -2872,16 +2987,20 @@
               headers: getNikofyAuthHeaders(),
               body: JSON.stringify({
                 asset,
+                network: net,
                 destinationAddress: destAddr,
                 amountMinor,
                 gasFeeMinor,
                 passcode: verifiedPin,
+                totpCode,
+                code: totpCode,
+                totp: totpCode,
               }),
             });
             const data = await parseJsonSafe(res);
             if (!res.ok || !data.ok) {
-              showToast(data.error || 'External withdrawal failed.', 'error');
-              return;
+              showToast(data.error || 'External withdrawal failed. Check your 6-digit Authenticator code.', 'error');
+              return false;
             }
             refId = data.reference;
             await syncBackendWalletSnapshot();
@@ -2902,8 +3021,9 @@
               'Total Debited': `$${totalUsd.toFixed(2)}`,
             },
           });
-        }
-      );
+          return true;
+        });
+      });
     }
 
     function clearP2pLookupBadge() {
@@ -3037,11 +3157,58 @@
       if (amt > limit) return showToast(`Exceeds ${KYC_LIMITS[appState.user.kycTier].name} daily limit (${formatNgn(limit)}).`, 'error');
       if (amt + fee > appState.balances.NGN) return showToast('Insufficient NGN balance (incl. ₦30 fee).', 'error');
 
-      authorizeTransactionWithPasscode(
-        `Withdraw ${formatNgn(amt)} to ${recipientAccountName} (${bank} • ${acct}) + ₦30 fee`,
-        () => {
-          appState.balances.NGN -= (amt + fee);
+      if (appState.user.kycStatus !== 'Verified') {
+        showToast('Complete KYC verification before withdrawing to a bank account.', 'error');
+        openKycModal();
+        return;
+      }
+
+      if (!appState.user.twoFactorEnabled) {
+        showToast('Enable Google Authenticator 2FA in Settings before withdrawing to a bank account.', 'error');
+        navigateTo('settings');
+        const card = document.getElementById('settings-2fa-card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      const summaryText = `Withdraw ${formatNgn(amt)} to ${recipientAccountName} (${bank} • ${acct}) + ₦30 fee`;
+
+      authorizeTransactionWithPasscode(summaryText, (verifiedPin) => {
+        requestAuthenticator2FA(summaryText, async (totpCode) => {
+          const amountKobo = Math.round(amt * 100);
+          const feeKobo = Math.round(fee * 100);
+          let refId = null;
+
+          if (appState.authToken) {
+            const res = await fetch(`${API_BASE_URL}/api/ngn/withdraw`, {
+              method: 'POST',
+              headers: getNikofyAuthHeaders(),
+              body: JSON.stringify({
+                bankCode,
+                bankName: bank,
+                accountNumber: acct,
+                accountName: recipientAccountName,
+                amountKobo,
+                feeKobo,
+                passcode: verifiedPin,
+                totpCode,
+                code: totpCode,
+                totp: totpCode,
+              }),
+            });
+            const data = await parseJsonSafe(res);
+            if (!res.ok || !data.ok) {
+              showToast(data.error || 'Bank withdrawal failed. Check your KYC status and 6-digit Authenticator code.', 'error');
+              return false;
+            }
+            refId = data.reference;
+            await syncBackendWalletSnapshot();
+          } else {
+            appState.balances.NGN -= (amt + fee);
+          }
+
           recordAndOpenInvoice({
+            ...(refId ? { id: refId } : {}),
             type: 'BANK_WITHDRAWAL',
             title: `Bank Withdrawal (${bank})`,
             subtitle: `${recipientAccountName} • ${acct} • Fee ₦30.00`,
@@ -3055,8 +3222,9 @@
               'Total Debited': formatNgn(amt + fee),
             },
           });
-        }
-      );
+          return true;
+        });
+      });
     }
 
     // =====================================================================
@@ -3494,93 +3662,89 @@
       appState.user.email = document.getElementById('set-email').value.trim();
       appState.user.phone = document.getElementById('set-phone').value.trim();
       const pw = document.getElementById('set-password').value;
-      const pin = document.getElementById('set-pin').value.trim();
+      const pin = document.getElementById('set-pin').value;
       if (pw) appState.user.password = pw;
       if (pin) {
-        if (!isValidFourDigitPasscode(pin)) {
-          return showToast('4-Digit Transaction PIN must be 4 digits (0-9).', 'error');
-        }
+        if (!/^[0-9]{4}$/.test(pin)) return showToast('PIN must be 4 digits.', 'error');
         appState.user.pin = pin;
+        appState.user.transactionPasscode = pin;
+        syncPasscodeToBackend(pin);
       }
       saveState();
       syncAllUI();
-      showToast('Account security settings updated.', 'success');
+      showToast('Account settings saved.', 'success');
     }
 
-    async function renderTotpQrCode(otpauthUrl, secret) {
+    async function renderTwoFaQrCode(otpauthUrl, fallbackQrDataUrl) {
       const qrImg = document.getElementById('twofa-qr-img');
       const qrFallback = document.getElementById('twofa-qr-fallback');
-      const previewEl = document.getElementById('twofa-otpauth-preview');
+      if (!qrImg) return;
 
-      const label = encodeURIComponent(`Nikofy.ng:${appState.user?.email || 'user@nikofy.ng'}`);
-      const uri = otpauthUrl || (secret ? `otpauth://totp/${label}?secret=${encodeURIComponent(secret)}&issuer=Nikofy.ng` : '');
-
-      if (previewEl) {
-        previewEl.textContent = uri || '';
-      }
-
-      if (uri && window.QRCode && typeof window.QRCode.toDataURL === 'function' && qrImg && qrFallback) {
+      if (otpauthUrl && typeof QRCode !== 'undefined' && typeof QRCode.toDataURL === 'function') {
         try {
-          const dataUrl = await window.QRCode.toDataURL(uri, { width: 160, margin: 1 });
+          const dataUrl = await QRCode.toDataURL(otpauthUrl, { width: 220, margin: 1 });
           qrImg.src = dataUrl;
           qrImg.classList.remove('hidden');
-          qrFallback.classList.add('hidden');
+          if (qrFallback) qrFallback.classList.add('hidden');
           return;
         } catch (err) {
-          console.warn('QRCode data URL fallback:', err.message || err);
+          console.warn('Client QRCode render fallback:', err);
         }
       }
 
-      if (qrImg && qrFallback) {
+      if (fallbackQrDataUrl) {
+        qrImg.src = fallbackQrDataUrl;
+        qrImg.classList.remove('hidden');
+        if (qrFallback) qrFallback.classList.add('hidden');
+      } else {
         qrImg.classList.add('hidden');
-        qrFallback.classList.remove('hidden');
+        if (qrFallback) qrFallback.classList.remove('hidden');
       }
     }
 
     async function start2FASetup() {
-      const setupBox = document.getElementById('twofa-setup-box');
-      const keyEl = document.getElementById('twofa-manual-key');
       const btn = document.getElementById('btn-start-2fa');
+      const box = document.getElementById('twofa-setup-box');
+      const keyEl = document.getElementById('twofa-manual-key');
+      const urlPreview = document.getElementById('twofa-otpauth-preview');
 
       if (!appState.authToken) {
-        return showToast('Please sign in first so your Google Authenticator key can be generated by the server.', 'error');
+        showToast('Sign in with your 6-digit email OTP first to generate a live Authenticator secret.', 'error');
+        return;
       }
 
-      setupBox.classList.remove('hidden');
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Generating Authenticator Key...';
+        btn.textContent = 'Generating Secret...';
       }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/security/totp/setup`, {
           method: 'POST',
           headers: getNikofyAuthHeaders(),
-          body: JSON.stringify({ email: appState.user.email }),
         });
         const data = await parseJsonSafe(res);
-
-        if (!res.ok || data.ok === false) {
-          throw new Error(data.error || data.message || 'Could not generate Google Authenticator setup key.');
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || 'Could not generate Google Authenticator setup key.');
         }
 
-        const secret = data.secret || data.manualKey || data.data?.secret || '';
-        const otpauthUrl = data.otpauthUrl || data.otpauth_url || data.data?.otpauthUrl || '';
-
-        if (!secret) {
-          throw new Error('Server did not return a TOTP secret key.');
-        }
+        const secret = data.manualEntryKey || data.secret || '';
+        const otpauthUrl = data.otpauthUrl || '';
 
         appState.user.twoFactorKey = secret;
         appState.user.twoFactorOtpauthUrl = otpauthUrl;
         saveState();
 
         if (keyEl) keyEl.textContent = secret;
-        await renderTotpQrCode(otpauthUrl, secret);
+        if (urlPreview) urlPreview.textContent = otpauthUrl ? `Issuer: Nikofy.ng (${appState.user.email})` : '';
 
-        showToast('Scan the QR code or copy the setup key into Google Authenticator, then enter the 6-digit code.', 'success');
+        await renderTwoFaQrCode(otpauthUrl, data.qrCodeDataUrl || '');
+
+        if (box) box.classList.remove('hidden');
+        document.getElementById('twofa-code-input')?.focus();
+        showToast('Scan QR or copy setup key into Google Authenticator.', 'info');
       } catch (err) {
-        showToast(err.message || 'Failed to start Google Authenticator setup.', 'error');
+        showToast(err.message || '2FA setup failed.', 'error');
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -3590,55 +3754,52 @@
     }
 
     async function copy2FAKey() {
-      const key = document.getElementById('twofa-manual-key')?.textContent?.trim() || appState.user.twoFactorKey || '';
-      if (!key) return;
+      const key = document.getElementById('twofa-manual-key').textContent.trim();
       try {
         await navigator.clipboard.writeText(key);
-        showToast('Authenticator setup key copied!', 'success');
-      } catch {
-        showToast(`Setup key: ${key}`, 'info');
+        showToast('Google Authenticator setup key copied.', 'success');
+      } catch (e) {
+        showToast('Copy key: ' + key, 'info');
       }
     }
 
     async function confirm2FASetup() {
-      const code = document.getElementById('twofa-code-input').value.trim();
+      const inputEl = document.getElementById('twofa-code-input');
+      const btn = document.getElementById('btn-confirm-2fa');
+      const code = (inputEl?.value || '').trim();
+
       if (!/^[0-9]{6}$/.test(code)) {
-        return showToast('Enter a valid 6-digit code from Google Authenticator.', 'error');
-      }
-      if (!appState.authToken) {
-        return showToast('Please sign in first to verify your 6-digit Google Authenticator code.', 'error');
+        return showToast('Enter the 6-digit code from Google Authenticator.', 'error');
       }
 
-      const btn = document.getElementById('btn-confirm-2fa');
+      if (!appState.authToken) {
+        return showToast('Sign in with your 6-digit email OTP first.', 'error');
+      }
+
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Verifying 6-Digit Code...';
+        btn.textContent = 'Verifying Code...';
       }
 
       try {
-        const isEnabling = !appState.user.twoFactorEnabled;
-        const endpoint = isEnabling ? '/api/security/totp/verify' : '/api/security/totp/disable';
-        const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        const res = await fetch(`${API_BASE_URL}/api/security/totp/verify`, {
           method: 'POST',
           headers: getNikofyAuthHeaders(),
-          body: JSON.stringify({ token: code }),
+          body: JSON.stringify({ code, totpCode: code, totp: code }),
         });
         const data = await parseJsonSafe(res);
-
-        if (!res.ok || data.ok === false) {
-          return showToast(data.error || data.message || 'Invalid 6-digit Google Authenticator code.', 'error');
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || 'Invalid 6-digit Authenticator code.');
         }
 
-        appState.user.twoFactorEnabled = typeof data.totpEnabled === 'boolean' ? data.totpEnabled : isEnabling;
-        document.getElementById('twofa-code-input').value = '';
-        if (appState.user.twoFactorEnabled) {
-          document.getElementById('twofa-setup-box').classList.add('hidden');
-        }
+        appState.user.twoFactorEnabled = typeof data.totpEnabled === 'boolean' ? data.totpEnabled : true;
         saveState();
+        if (inputEl) inputEl.value = '';
+        document.getElementById('twofa-setup-box').classList.add('hidden');
         syncAllUI();
-        showToast(`Google Authenticator 2FA ${appState.user.twoFactorEnabled ? 'Enabled' : 'Disabled'}.`, 'success');
+        showToast('Google Authenticator 2FA verified & active!', 'success');
       } catch (err) {
-        showToast(err.message || 'Could not verify 2FA code.', 'error');
+        showToast(err.message || 'Invalid 6-digit Authenticator code.', 'error');
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -3647,105 +3808,37 @@
       }
     }
 
-    function toggleGoogle2FA() {
-      confirm2FASetup();
-    }
-
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-    const COINGECKO_IDS = {
-      BTC: 'bitcoin',
-      USDT: 'tether',
-      ETH: 'ethereum',
-      BNB: 'binancecoin',
-      SOL: 'solana',
-    };
-
-    let isLoadingMarketChart = false;
-
-    async function fetchLiveMarketPrices() {
-      try {
-        const ids = Object.values(COINGECKO_IDS).join(',');
-        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=ngn&include_24hr_change=true`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Price fetch failed: ${res.status}`);
-        const data = await res.json();
-
-        let updated = false;
-        Object.entries(COINGECKO_IDS).forEach(([sym, cgId]) => {
-          const entry = data[cgId];
-          if (entry && typeof entry.ngn === 'number' && entry.ngn > 0) {
-            MARKET_COINS[sym].price = entry.ngn;
-            if (typeof entry.ngn_24h_change === 'number') {
-              const pct = entry.ngn_24h_change;
-              MARKET_COINS[sym].positive = pct >= 0;
-              MARKET_COINS[sym].change = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
-            }
-            updated = true;
-          }
-        });
-
-        if (updated) {
-          selectMarketCoin(appState.ui.marketCoin || 'BTC', { skipChartFetch: true });
-          updateTradeQuote();
-        }
-      } catch (err) {
-        console.warn('Using fallback crypto prices:', err.message || err);
-      }
-    }
-
-    async function fetchLiveCoinChart(coin) {
-      const cgId = COINGECKO_IDS[coin];
-      if (!cgId || isLoadingMarketChart) return;
-      isLoadingMarketChart = true;
-
-      try {
-        const url = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(cgId)}/market_chart?vs_currency=ngn&days=7`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Chart fetch failed: ${res.status}`);
-        const data = await res.json();
-        const prices = Array.isArray(data.prices) ? data.prices.map((p) => p[1]).filter((n) => typeof n === 'number' && n > 0) : [];
-
-        if (prices.length >= 2 && MARKET_COINS[coin]) {
-          const sampled = [];
-          const step = Math.max(1, Math.floor(prices.length / 24));
-          for (let i = 0; i < prices.length; i += step) {
-            sampled.push(prices[i]);
-          }
-          if (sampled[sampled.length - 1] !== prices[prices.length - 1]) {
-            sampled.push(prices[prices.length - 1]);
-          }
-          MARKET_COINS[coin].points = sampled;
-          MARKET_COINS[coin].price = prices[prices.length - 1];
-          const first = prices[0];
-          const last = prices[prices.length - 1];
-          const pct = ((last - first) / first) * 100;
-          MARKET_COINS[coin].positive = pct >= 0;
-          MARKET_COINS[coin].change = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
-          selectMarketCoin(appState.ui.marketCoin || coin, { skipChartFetch: true });
-          updateTradeQuote();
-        }
-      } catch (err) {
-        console.warn(`Using fallback chart for ${coin}:`, err.message || err);
-      } finally {
-        isLoadingMarketChart = false;
-      }
-    }
-
-    function startLiveMarketFeed() {
-      fetchLiveMarketPrices();
-      fetchLiveCoinChart(appState.ui.marketCoin || 'BTC');
-      setInterval(() => {
-        fetchLiveMarketPrices();
-      }, 60000);
-    }
-
-    async function parseJsonSafe(res) {
-      const text = await res.text();
+    // =====================================================================
+    // BACKEND API CONNECTOR (https://nikofy-ng-1.onrender.com)
+    // =====================================================================
+    async function parseJsonSafe(response) {
+      const text = await response.text();
+      if (!text) return {};
       try {
         return JSON.parse(text);
-      } catch {
-        return { ok: false, error: text || `HTTP ${res.status}` };
+      } catch (e) {
+        return { raw: text };
+      }
+    }
+
+    async function checkBackendHealth() {
+      const statusText = document.getElementById('backend-status-text');
+      if (statusText) statusText.textContent = 'Checking Render backend...';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/health`);
+        const data = await parseJsonSafe(res);
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        if (statusText) {
+          statusText.textContent = `Connected (${data.service || 'nikofy-backend'} • ${data.status || 'ok'})`;
+        }
+        return data;
+      } catch (err) {
+        if (statusText) {
+          statusText.textContent = `Backend connection failed: ${err.message}`;
+        }
+        return null;
       }
     }
 
@@ -3755,60 +3848,61 @@
         headers: getNikofyAuthHeaders(),
         body: JSON.stringify({ userId, passcode }),
       });
-      return parseJsonSafe(res);
+      const data = await parseJsonSafe(res);
+      if (!res.ok) {
+        return { ok: false, error: data.error || `HTTP ${res.status}` };
+      }
+      return data;
     }
 
-    async function testBackendConnection() {
-      const statusEl = document.getElementById('backend-status-text');
-      const btn = document.getElementById('test-backend-btn');
-      if (btn) btn.disabled = true;
-      if (statusEl) statusEl.textContent = 'Checking Render backend...';
-
+    async function fetchLiveCoinChart(coinSymbol) {
+      const sym = String(coinSymbol || 'BTC').toUpperCase();
       try {
-        const res = await fetch(`${API_BASE_URL}/api/health`, { method: 'GET' });
+        const res = await fetch(`${API_BASE_URL}/api/market/chart/${encodeURIComponent(sym)}`);
         const data = await parseJsonSafe(res);
-        if (res.ok && (data.ok !== false)) {
-          if (statusEl) statusEl.textContent = `Connected (${API_BASE_URL}) — OK`;
-        } else {
-          if (statusEl) statusEl.textContent = `Response ${res.status}: ${data.error || 'Unhealthy'}`;
+        if (!res.ok || !data.ok) return null;
+
+        if (MARKET_COINS[sym]) {
+          const livePrice = Number(data.priceNgn || data.price || 0);
+          if (livePrice > 0) MARKET_COINS[sym].price = livePrice;
+          if (typeof data.change24h === 'number') {
+            const sign = data.change24h >= 0 ? '+' : '';
+            MARKET_COINS[sym].change = `${sign}${data.change24h.toFixed(2)}%`;
+            MARKET_COINS[sym].positive = data.change24h >= 0;
+          }
+          if (Array.isArray(data.points) && data.points.length >= 2) {
+            MARKET_COINS[sym].points = data.points.map(Number);
+          }
+          if (appState.ui.marketCoin === sym) {
+            selectMarketCoin(sym, { skipChartFetch: true });
+          }
         }
+        return data;
       } catch (err) {
-        if (statusEl) statusEl.textContent = `Connection failed: ${err.message || err}`;
-      } finally {
-        if (btn) btn.disabled = false;
+        console.warn('Live chart fetch skipped:', err.message || err);
+        return null;
       }
     }
 
-    // =====================================================================
-    // INITIALIZATION
-    // =====================================================================
-    (function init() {
-      applyTheme();
-      refreshCaptcha('signin');
-      refreshCaptcha('signup');
-      setBillCategory(appState.ui.billCategory || 'DATA');
-      setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
-      setTradeSide(appState.ui.tradeSide || 'buy');
-      renderWithdrawalBankOptions();
-      resetAccountVerificationUI();
-      fetchLiveNigerianBanks();
+    document.getElementById('test-backend-btn')?.addEventListener('click', checkBackendHealth);
 
-      if (appState.user?.twoFactorKey) {
-        renderTotpQrCode(appState.user.twoFactorOtpauthUrl, appState.user.twoFactorKey);
-      }
-
-      const testBtn = document.getElementById('test-backend-btn');
-      if (testBtn) testBtn.addEventListener('click', testBackendConnection);
-
-      if (appState.authenticated) {
-        enterDashboard();
-        syncBackendWalletSnapshot();
-      } else {
-        document.getElementById('auth-screen').classList.remove('hidden');
-        document.getElementById('app-shell').classList.add('hidden');
-      }
-      startLiveMarketFeed();
-    })();
+    // Boot Application
+    applyTheme();
+    refreshCaptcha('signin');
+    refreshCaptcha('signup');
+    renderWithdrawalBankOptions();
+    fetchLiveNigerianBanks();
+    setBillCategory(appState.ui.billCategory || 'DATA');
+    setTradeSide(appState.ui.tradeSide || 'buy');
+    setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
+    if (appState.authenticated) {
+      enterDashboard();
+      syncBackendWalletSnapshot();
+    } else {
+      syncAllUI();
+    }
+    checkBackendHealth();
+    fetchLiveCoinChart(appState.ui.marketCoin || 'BTC');
   </script>
 </body>
 </html>
