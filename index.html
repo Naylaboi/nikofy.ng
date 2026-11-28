@@ -639,7 +639,7 @@
                 <label id="p2p-amount-label" for="p2p-amount" class="font-semibold text-slate-700 dark:text-slate-300">Amount (NGN)</label>
                 <span id="p2p-fee-badge" class="font-bold text-emerald-600 dark:text-emerald-400">Fee: ₦0.00 • Gas: ₦0.00 (Free)</span>
               </div>
-              <input id="p2p-amount" type="number" min="1" step="any" required placeholder="5000"
+              <input id="p2p-amount" type="number" min="0.000001" step="any" required placeholder="5000"
                 class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-4 py-3 text-lg font-extrabold text-slate-900 dark:text-white tabular-nums outline-none" />
             </div>
             <button id="p2p-submit-btn" type="submit" class="w-full py-3.5 px-5 rounded-2xl bg-nikofy-green hover:bg-nikofy-greenLight text-white font-extrabold text-sm transition">
@@ -2636,14 +2636,20 @@
       const labelEl = document.getElementById('p2p-amount-label');
       const feeEl = document.getElementById('p2p-fee-badge');
       const inputEl = document.getElementById('p2p-amount');
-      if (asset === 'NGN') {
-        if (labelEl) labelEl.textContent = 'Amount (NGN)';
-        if (feeEl) feeEl.textContent = 'Fee: ₦0.00 • Gas: ₦0.00 (100% Free)';
-        if (inputEl && !inputEl.value) inputEl.placeholder = '5000';
-      } else {
-        if (labelEl) labelEl.textContent = `Amount (${asset} • USD Equivalent)`;
-        if (feeEl) feeEl.textContent = 'Fee: $0.00 • Gas: $0.00 (100% Free)';
-        if (inputEl && !inputEl.value) inputEl.placeholder = '25';
+      const isNgn = asset === 'NGN';
+      const isSixDec = SIX_DECIMAL_ASSETS.has(asset);
+
+      if (labelEl) {
+        labelEl.textContent = isNgn ? 'Amount (NGN)' : `Amount (${asset})`;
+      }
+      if (feeEl) {
+        feeEl.textContent = isNgn
+          ? 'Fee: ₦0.00 • Gas: ₦0.00 (100% Free)'
+          : 'Fee: $0.00 • Gas: $0.00 (100% Free)';
+      }
+      if (inputEl) {
+        inputEl.min = isNgn ? '1' : (isSixDec ? '0.000001' : '0.01');
+        inputEl.placeholder = isNgn ? '5000' : (isSixDec ? '0.0015' : '25');
       }
     }
 
@@ -2949,8 +2955,10 @@
       if (!(amt > 0)) return showToast('Enter a valid amount.', 'error');
 
       const isNgn = asset === 'NGN';
+      const decimals = isNgn ? 2 : (SIX_DECIMAL_ASSETS.has(asset) ? 6 : 2);
+      const precisionScale = getAssetPrecisionScale(asset);
       const balKey = isNgn ? 'NGN' : (asset === 'USDC' ? 'USDT' : asset);
-      const formattedAmt = isNgn ? formatNgn(amt) : `$${amt.toFixed(2)} ${asset}`;
+      const formattedAmt = isNgn ? formatNgn(amt) : `${amt.toFixed(decimals)} ${asset}`;
       const formattedFee = isNgn ? '₦0.00 (Free)' : '$0.00 (Free)';
 
       if (amt > (appState.balances[balKey] || 0)) {
@@ -2969,7 +2977,7 @@
               body: JSON.stringify({
                 recipientUsername: rec,
                 asset,
-                amountMinor: Math.round(amt * 100),
+                amountMinor: Math.round(amt * precisionScale),
                 passcode: verifiedPin,
               }),
             });
