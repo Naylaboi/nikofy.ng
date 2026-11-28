@@ -76,13 +76,11 @@
       <!-- Brand Header -->
       <div class="flex items-center justify-between mb-6 gap-3">
         <div class="flex items-center gap-2.5 min-w-0">
-          <!-- Light Mode Logo -->
           <img
             src="./assets/logo-light.jpg"
             alt="Nikofy — Fast, Secure, Smart"
             class="h-10 sm:h-11 w-auto max-w-[165px] object-contain rounded-xl block dark:hidden shrink-0"
           />
-          <!-- Dark Mode Logo -->
           <img
             src="./assets/logo-dark.jpg"
             alt="Nikofy — Fast, Secure, Smart"
@@ -216,7 +214,6 @@
             Sent from <strong class="text-nikofy-green dark:text-emerald-400">noreply@nikofy.ng</strong>. Check your Inbox or Spam folder and enter the 6-digit code below (expires in 10 minutes).
           </div>
 
-          <!-- Sign-In OTP Form -->
           <form id="form-otp-signin" onsubmit="handleSignInOtpVerify(event)" class="hidden space-y-4">
             <div>
               <label for="signin-otp-input" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Enter 6-Digit Sign-In Code</label>
@@ -228,7 +225,6 @@
             </button>
           </form>
 
-          <!-- Sign-Up OTP Form -->
           <form id="form-otp-signup" onsubmit="handleSignUpOtpVerify(event)" class="hidden space-y-4">
             <div>
               <label for="signup-email-otp-input" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Enter 6-Digit Email Verification Code</label>
@@ -264,13 +260,11 @@
     <header class="sticky top-0 z-30 bg-white/95 dark:bg-nikofy-darkBg/95 backdrop-blur-md border-b border-slate-200 dark:border-nikofy-darkBorder">
       <div class="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2.5 min-w-0">
-          <!-- Light Mode Logo -->
           <img
             src="./assets/logo-light.jpg"
             alt="Nikofy — Fast, Secure, Smart"
             class="h-8 sm:h-9 w-auto max-w-[125px] object-contain rounded-lg block dark:hidden shrink-0"
           />
-          <!-- Dark Mode Logo -->
           <img
             src="./assets/logo-dark.jpg"
             alt="Nikofy — Fast, Secure, Smart"
@@ -286,7 +280,7 @@
           </div>
         </div>
 
-        <!-- Desktop Navigation (with small icons on top of labels) -->
+        <!-- Desktop Navigation -->
         <nav class="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-nikofy-darkCard p-1 rounded-2xl border border-slate-200 dark:border-nikofy-darkBorder">
           <button type="button" data-nav="home" onclick="navigateTo('home')" class="nav-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-nikofy-green text-white flex flex-col items-center gap-0.5">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
@@ -339,11 +333,8 @@
 
     <main class="max-w-5xl mx-auto px-4 pt-5 space-y-6">
 
-      <!-- ================================================================= -->
-      <!-- TAB 1: HOME DASHBOARD + LIVE CRYPTO MARKET CHART                  -->
-      <!-- ================================================================= -->
+      <!-- TAB 1: HOME DASHBOARD + LIVE CRYPTO MARKET CHART -->
       <section id="view-home" class="app-view space-y-5">
-        <!-- Balance Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div class="bg-gradient-to-br from-nikofy-green to-nikofy-blue text-white rounded-3xl p-5 shadow-lg">
             <div class="flex items-center justify-between mb-2">
@@ -373,7 +364,6 @@
           </div>
         </div>
 
-        <!-- Quick Actions -->
         <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-4 sm:p-5">
           <div class="flex items-center justify-between mb-3.5">
             <h2 class="text-sm font-extrabold text-slate-900 dark:text-white">Quick Actions</h2>
@@ -438,7 +428,6 @@
           <div id="market-ticker-grid" class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1"></div>
         </div>
 
-        <!-- Recent Ledger Activity -->
         <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-base font-extrabold text-slate-900 dark:text-white">Recent Activity (Tap for Invoice)</h2>
@@ -448,9 +437,7 @@
         </div>
       </section>
 
-      <!-- ================================================================= -->
-      <!-- TAB 2: BUY & SELL CRYPTO                                          -->
-      <!-- ================================================================= -->
+      <!-- TAB 2: BUY & SELL CRYPTO -->
       <section id="view-trade" class="app-view hidden space-y-5">
         <div class="max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6">
           <div class="flex items-center justify-between mb-5">
@@ -516,9 +503,7 @@
         </div>
       </section>
 
-      <!-- ================================================================= -->
-      <!-- TAB 3: NGN DEPOSIT, EXTERNAL CRYPTO, P2P @USERNAME, WITHDRAW      -->
-      <!-- ================================================================= -->
+      <!-- TAB 3: NGN DEPOSIT, EXTERNAL CRYPTO, P2P @USERNAME, WITHDRAW -->
       <section id="view-transfer" class="app-view hidden space-y-5">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 dark:bg-nikofy-darkCard p-1.5 rounded-2xl border border-slate-200 dark:border-nikofy-darkBorder max-w-2xl mx-auto">
           <button id="subtab-ngn-deposit" type="button" onclick="setTransferSubtab('ngn-deposit')" class="py-2 rounded-xl text-xs font-extrabold bg-nikofy-green text-white">NGN Deposit</button>
@@ -527,7 +512,7 @@
           <button id="subtab-withdraw" type="button" onclick="setTransferSubtab('withdraw')" class="py-2 rounded-xl text-xs font-extrabold text-slate-600 dark:text-slate-400">NGN Bank Out</button>
         </div>
 
-        <!-- 3A: NGN DEPOSIT (PAYSTACK LIVE CHECKOUT + BACKEND VERIFY) -->
+        <!-- 3A: NGN DEPOSIT -->
         <div id="panel-ngn-deposit" class="max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
             <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Deposit NGN (Paystack Instant)</h2>
@@ -551,7 +536,7 @@
           </form>
         </div>
 
-        <!-- 3B: EXTERNAL CRYPTO RECEIVE / SEND ($0.40 / $0.80 SERVICE FEE + GAS) -->
+        <!-- 3B: EXTERNAL CRYPTO RECEIVE / SEND -->
         <div id="panel-ext-crypto" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
             <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">External Crypto Send &amp; Receive</h2>
@@ -610,7 +595,6 @@
             </button>
           </form>
 
-          <!-- Deposit Address Result Box -->
           <div id="ext-deposit-result" class="hidden bg-white dark:bg-nikofy-darkBg border border-emerald-500/40 rounded-2xl p-4 space-y-2 text-xs">
             <div class="flex items-center justify-between">
               <span id="ext-deposit-meta" class="font-bold text-nikofy-green dark:text-emerald-400 uppercase">USDT • TRC20</span>
@@ -621,7 +605,7 @@
           </div>
         </div>
 
-        <!-- 3C: INTERNAL P2P TRANSFER BY @USERNAME (100% FREE — ZERO FEE & ZERO GAS) -->
+        <!-- 3C: INTERNAL P2P TRANSFER BY @USERNAME -->
         <div id="panel-p2p" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div>
             <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Send by @username (P2P)</h2>
@@ -664,7 +648,7 @@
           </form>
         </div>
 
-        <!-- 3D: NGN BANK WITHDRAWAL (ALL NIGERIAN COMMERCIAL & MFB BANKS + SEARCH + ACCOUNT NAME VERIFY + 2FA) -->
+        <!-- 3D: NGN BANK WITHDRAWAL -->
         <div id="panel-withdraw" class="hidden max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between gap-2">
             <div>
@@ -675,7 +659,6 @@
           </div>
 
           <form onsubmit="executeBankWithdrawal(event)" class="space-y-4">
-            <!-- Step 1: Search & Choose Bank -->
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <label for="withdraw-bank-search" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">1. Search Bank (Commercial or Microfinance / MFB)</label>
@@ -690,7 +673,6 @@
               </select>
             </div>
 
-            <!-- Step 2: 10-Digit Account Number + Live Name Verification -->
             <div class="space-y-2">
               <label for="withdraw-acct-num" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">2. Enter 10-Digit Account Number to Verify Name</label>
               <div class="flex gap-2">
@@ -703,7 +685,6 @@
                 </button>
               </div>
 
-              <!-- Verified Account Name Box -->
               <div id="withdraw-acct-verify-box" class="hidden rounded-2xl p-3 text-xs border transition">
                 <div class="flex items-center justify-between gap-2">
                   <span id="withdraw-acct-verify-label" class="font-bold uppercase tracking-wide text-[10px]">Account Name</span>
@@ -714,7 +695,6 @@
               </div>
             </div>
 
-            <!-- Step 3: Amount & Submit (Enabled once Account Name is Verified) -->
             <div>
               <label for="withdraw-amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">3. Amount (NGN)</label>
               <input id="withdraw-amount" type="number" min="1000" step="100" required placeholder="25000"
@@ -730,9 +710,7 @@
         </div>
       </section>
 
-      <!-- ================================================================= -->
-      <!-- TAB 4: LIVE DATA PLANS & INSTANT BILL PAYMENTS                    -->
-      <!-- ================================================================= -->
+      <!-- TAB 4: LIVE DATA PLANS & INSTANT BILL PAYMENTS -->
       <section id="view-bills" class="app-view hidden space-y-5">
         <div class="max-w-xl mx-auto bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between gap-2">
@@ -750,7 +728,6 @@
             <button type="button" data-bill-cat="CABLE_TV" onclick="setBillCategory('CABLE_TV')" class="bill-cat-btn py-2 rounded-xl text-xs font-extrabold text-slate-600 dark:text-slate-400">Cable TV</button>
           </div>
 
-          <!-- Prominent Red Error Banner for Failed Bill / Product Errors -->
           <div id="bill-error-banner" class="hidden bg-rose-600/15 border border-rose-500 text-rose-700 dark:text-rose-200 rounded-2xl px-4 py-3 text-xs font-bold flex items-start justify-between gap-2">
             <span id="bill-error-banner-text">Product does not exist</span>
             <button type="button" onclick="clearBillErrorBanner()" class="text-[11px] font-extrabold underline shrink-0">Dismiss</button>
@@ -762,7 +739,6 @@
               <select id="bill-provider" onchange="handleBillProviderChange()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none"></select>
             </div>
 
-            <!-- Prepaid / Postpaid Selector for Electricity (High-contrast Light Mode text) -->
             <div id="electricity-meter-type-container" class="hidden space-y-1.5">
               <label for="bill-meter-type" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Electricity Meter Type</label>
               <select id="bill-meter-type" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none">
@@ -796,16 +772,13 @@
             </button>
           </form>
 
-          <!-- Live Backend Response Box for Debugging Render + VTpass -->
           <div id="bill-api-diagnostic" class="bg-white dark:bg-nikofy-darkBg border border-slate-200 dark:border-nikofy-darkBorder rounded-2xl p-3 text-[11px] font-mono text-slate-600 dark:text-slate-300 break-all">
             Endpoint: POST /api/bills/pay &bull; Ready to send live request to Render
           </div>
         </div>
       </section>
 
-      <!-- ================================================================= -->
-      <!-- TAB 5: TRANSACTION LEDGER                                         -->
-      <!-- ================================================================= -->
+      <!-- TAB 5: TRANSACTION LEDGER -->
       <section id="view-ledger" class="app-view hidden space-y-4">
         <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6">
           <div class="mb-4">
@@ -816,12 +789,9 @@
         </div>
       </section>
 
-      <!-- ================================================================= -->
-      <!-- TAB 6: SETTINGS, KYC, SUPPORT, SIGN OUT & 2FA                     -->
-      <!-- ================================================================= -->
+      <!-- TAB 6: SETTINGS, KYC, SUPPORT, SIGN OUT & 2FA -->
       <section id="view-settings" class="app-view hidden space-y-5">
         <div class="max-w-2xl mx-auto space-y-5">
-          <!-- KYC & Customer Support Quick Card -->
           <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Verification &amp; Support</h3>
@@ -837,7 +807,6 @@
             </div>
           </div>
 
-          <!-- Appearance / Light & Dark Mode -->
           <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 flex items-center justify-between">
             <div>
               <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Appearance</h3>
@@ -848,7 +817,6 @@
             </button>
           </div>
 
-          <!-- Profile & Security Credentials -->
           <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 sm:p-6 space-y-4">
             <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Account Settings</h2>
             <form onsubmit="saveAccountSettings(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -875,7 +843,6 @@
               </div>
             </form>
 
-            <!-- Dedicated 4-Digit Transaction Passcode Setup & Change Card -->
             <div class="pt-4 border-t border-slate-200 dark:border-nikofy-darkBorder space-y-3">
               <div class="flex items-center justify-between">
                 <div>
@@ -956,7 +923,6 @@
             </div>
           </div>
 
-          <!-- Sign Out Action inside Settings -->
           <div class="bg-slate-50 dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl p-5 flex items-center justify-between gap-3">
             <div>
               <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Session</h3>
@@ -970,7 +936,7 @@
       </section>
     </main>
 
-    <!-- Mobile Bottom Navigation (with small icons right above each label) -->
+    <!-- Mobile Bottom Navigation -->
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-nikofy-darkCard/95 backdrop-blur-md border-t border-slate-200 dark:border-nikofy-darkBorder px-1 py-2">
       <div class="max-w-md mx-auto grid grid-cols-6 gap-1">
         <button type="button" data-nav="home" onclick="navigateTo('home')" class="mobile-nav-btn py-1 rounded-xl text-[10px] font-extrabold text-nikofy-green dark:text-emerald-400 flex flex-col items-center gap-0.5">
@@ -1001,11 +967,7 @@
     </nav>
   </div>
 
-  <!-- ===================================================================== -->
-  <!-- MODALS: ITEMIZED INVOICE, PASSCODE, 2FA TOTP & KYC / LIVENESS SCAN    -->
-  <!-- ===================================================================== -->
-
-  <!-- Itemized Nikofy.ng Invoice Modal -->
+  <!-- MODALS -->
   <div id="modal-invoice" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between">
@@ -1020,7 +982,6 @@
     </div>
   </div>
 
-  <!-- Mandatory 4-Digit Transaction Passcode Setup Modal -->
   <div id="modal-setup-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between">
@@ -1049,7 +1010,6 @@
     </div>
   </div>
 
-  <!-- Per-Transaction 4-Digit Passcode Verification Modal -->
   <div id="modal-verify-passcode" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between">
@@ -1077,7 +1037,6 @@
     </div>
   </div>
 
-  <!-- 6-Digit Google Authenticator 2FA Prompt Modal (Bank Withdrawals & External Crypto Payouts) -->
   <div id="modal-verify-totp" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between">
@@ -1105,7 +1064,6 @@
     </div>
   </div>
 
-  <!-- KYC Tier & Liveness Scan Modal -->
   <div id="modal-kyc" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white dark:bg-nikofy-darkCard border border-slate-200 dark:border-nikofy-darkBorder rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between">
@@ -1166,9 +1124,6 @@
     <span id="backend-status-text" style="margin-left:8px;font-size:12px;">Not checked yet</span>
   </div>
 
-  <!-- ===================================================================== -->
-  <!-- APPLICATION LOGIC                                                     -->
-  <!-- ===================================================================== -->
   <script>
     const STORAGE_KEY = 'nikofy_ng_state_v1';
     const API_BASE_URL = 'https://nikofy-ng-1.onrender.com';
@@ -1181,15 +1136,30 @@
       return SIX_DECIMAL_ASSETS.has(String(asset || '').toUpperCase()) ? 1e6 : 1e2;
     }
 
-    function toMinorUnits(amount, asset) {
-      return Math.round(Number(amount || 0) * getAssetPrecisionScale(asset));
+    function normalizeMinorAmount(rawMinor, asset) {
+      const sym = String(asset || '').toUpperCase();
+      const val = Number(rawMinor ?? 0);
+      if (!Number.isFinite(val)) return 0;
+      if (sym === 'NGN' || sym === 'USDT' || sym === 'USDC') {
+        return val / 100;
+      }
+      if (SIX_DECIMAL_ASSETS.has(sym)) {
+        return Number.isInteger(val) && val % 10000 === 0 && val < 1e8 ? val / 100 : val / 1e6;
+      }
+      return val / 100;
     }
 
-    function fromMinorUnits(minor, asset) {
-      return Number(minor || 0) / getAssetPrecisionScale(asset);
+    function requiresAuthenticatorResponse(res, data) {
+      const combined = `${data?.code || ''} ${data?.error || ''} ${data?.message || ''}`.toLowerCase();
+      return (
+        data?.requiresTotp === true ||
+        data?.require2fa === true ||
+        combined.includes('totp') ||
+        combined.includes('2fa') ||
+        combined.includes('authenticator')
+      );
     }
 
-    // Comprehensive Nigerian Commercial, Non-Interest, Digital/PSB & Microfinance Banks
     const NIGERIAN_BANKS = [
       { code: '044', name: 'Access Bank Plc', type: 'Commercial' },
       { code: '063', name: 'Access Bank (Diamond)', type: 'Commercial' },
@@ -1225,175 +1195,11 @@
       { code: '50211', name: 'Kuda Microfinance Bank', type: 'MFB / Digital' },
       { code: '50515', name: 'Moniepoint Microfinance Bank', type: 'MFB / Digital' },
       { code: '999991', name: 'PalmPay', type: 'MFB / Digital' },
-      { code: '50273', name: 'AB Microfinance Bank', type: 'MFB' },
-      { code: '50298', name: 'Accion Microfinance Bank', type: 'MFB' },
-      { code: '50315', name: 'Addosser Microfinance Bank', type: 'MFB' },
-      { code: '50304', name: 'Afekhafe Microfinance Bank', type: 'MFB' },
-      { code: '50339', name: 'Agosasa Microfinance Bank', type: 'MFB' },
-      { code: '50342', name: 'Al-Hayat Microfinance Bank', type: 'MFB' },
-      { code: '50365', name: 'Amju Unique Microfinance Bank', type: 'MFB' },
-      { code: '50371', name: 'Ampersand Microfinance Bank', type: 'MFB' },
-      { code: '50383', name: 'Apple Microfinance Bank', type: 'MFB' },
-      { code: '50392', name: 'Assets Microfinance Bank', type: 'MFB' },
-      { code: '50409', name: 'Astrapolaris Microfinance Bank', type: 'MFB' },
-      { code: '50427', name: 'Bainescredit Microfinance Bank', type: 'MFB' },
-      { code: '50439', name: 'BC Kash Microfinance Bank', type: 'MFB' },
-      { code: '50445', name: 'Boctrust Microfinance Bank', type: 'MFB' },
-      { code: '50452', name: 'Bosak Microfinance Bank', type: 'MFB' },
-      { code: '50463', name: 'Bowen Microfinance Bank', type: 'MFB' },
       { code: '50478', name: 'Carbon Microfinance Bank', type: 'MFB / Digital' },
-      { code: '50482', name: 'Cashconnect Microfinance Bank', type: 'MFB' },
-      { code: '50491', name: 'CEMCS Microfinance Bank', type: 'MFB' },
-      { code: '50502', name: 'Chanelle Microfinance Bank', type: 'MFB' },
-      { code: '50526', name: 'Chikum Microfinance Bank', type: 'MFB' },
-      { code: '50539', name: 'Citizens Trust Microfinance Bank', type: 'MFB' },
-      { code: '50547', name: 'Cloverleaf Microfinance Bank', type: 'MFB' },
-      { code: '50554', name: 'Concord Microfinance Bank', type: 'MFB' },
-      { code: '50563', name: 'Consumer Microfinance Bank', type: 'MFB' },
-      { code: '50571', name: 'Corestep Microfinance Bank', type: 'MFB' },
-      { code: '50585', name: 'Covenant Microfinance Bank', type: 'MFB' },
-      { code: '50592', name: 'Credit Afrique Microfinance Bank', type: 'MFB' },
-      { code: '50605', name: 'Daylight Microfinance Bank', type: 'MFB' },
-      { code: '50614', name: 'Ebsu Microfinance Bank', type: 'MFB' },
-      { code: '50629', name: 'Ekondo Microfinance Bank', type: 'MFB' },
-      { code: '50635', name: 'Emeralds Microfinance Bank', type: 'MFB' },
-      { code: '50644', name: 'Empire Trust Microfinance Bank', type: 'MFB' },
-      { code: '50658', name: 'Esan Microfinance Bank', type: 'MFB' },
-      { code: '50669', name: 'Eso-E Microfinance Bank', type: 'MFB' },
-      { code: '50672', name: 'Ewt Microfinance Bank', type: 'MFB' },
       { code: '50689', name: 'FairMoney Microfinance Bank', type: 'MFB / Digital' },
-      { code: '50697', name: 'Fame Microfinance Bank', type: 'MFB' },
-      { code: '50703', name: 'Fast Microfinance Bank', type: 'MFB' },
-      { code: '50718', name: 'FBNQuest Merchant / Microfinance', type: 'MFB' },
-      { code: '50725', name: 'Fidelity Microfinance Bank', type: 'MFB' },
-      { code: '50739', name: 'Fina Trust Microfinance Bank', type: 'MFB' },
-      { code: '50746', name: 'First Multiple Microfinance Bank', type: 'MFB' },
-      { code: '50752', name: 'First Option Microfinance Bank', type: 'MFB' },
-      { code: '50761', name: 'First Royal Microfinance Bank', type: 'MFB' },
-      { code: '50774', name: 'Flutterwave / Trust Microfinance Bank', type: 'MFB' },
-      { code: '50788', name: 'Fortis Microfinance Bank', type: 'MFB' },
-      { code: '50793', name: 'Fullrange Microfinance Bank', type: 'MFB' },
-      { code: '50801', name: 'Futo Microfinance Bank', type: 'MFB' },
-      { code: '50819', name: 'Garkuwa Microfinance Bank', type: 'MFB' },
-      { code: '50824', name: 'Gateway Mortgage / Microfinance Bank', type: 'MFB' },
-      { code: '50832', name: 'Giant Stride Microfinance Bank', type: 'MFB' },
-      { code: '50846', name: 'Girei Microfinance Bank', type: 'MFB' },
-      { code: '50853', name: 'Good Neighbours Microfinance Bank', type: 'MFB' },
-      { code: '50867', name: 'Greenwich / Grobank Microfinance', type: 'MFB' },
-      { code: '50875', name: 'Grooming Microfinance Bank', type: 'MFB' },
-      { code: '50882', name: 'GTI Microfinance Bank', type: 'MFB' },
-      { code: '50894', name: 'Hackman Microfinance Bank', type: 'MFB' },
-      { code: '50906', name: 'Hasal Microfinance Bank', type: 'MFB' },
-      { code: '50918', name: 'Headway Microfinance Bank', type: 'MFB' },
-      { code: '50927', name: 'Ibile Microfinance Bank', type: 'MFB' },
-      { code: '50934', name: 'Ikire Microfinance Bank', type: 'MFB' },
-      { code: '50949', name: 'Ilaro Poly Microfinance Bank', type: 'MFB' },
-      { code: '50955', name: 'Imowo Microfinance Bank', type: 'MFB' },
-      { code: '50968', name: 'Infinity Microfinance Bank', type: 'MFB' },
-      { code: '50972', name: 'Insight Microfinance Bank', type: 'MFB' },
-      { code: '50983', name: 'Island Microfinance Bank', type: 'MFB' },
-      { code: '50994', name: 'Isuofia Microfinance Bank', type: 'MFB' },
-      { code: '51002', name: 'Kadpoly Microfinance Bank', type: 'MFB' },
-      { code: '51018', name: 'KCMB Microfinance Bank', type: 'MFB' },
-      { code: '51026', name: 'Kegow / Adams Microfinance Bank', type: 'MFB' },
-      { code: '51034', name: 'Kredi Money Microfinance Bank', type: 'MFB' },
-      { code: '51049', name: 'Lagos Building Investment / MFB', type: 'MFB' },
       { code: '51058', name: 'LAPO Microfinance Bank', type: 'MFB' },
-      { code: '51067', name: 'Lavender Microfinance Bank', type: 'MFB' },
-      { code: '51073', name: 'Leadremit / Lead Microfinance Bank', type: 'MFB' },
-      { code: '51084', name: 'Legend Microfinance Bank', type: 'MFB' },
-      { code: '51092', name: 'Letshego Microfinance Bank', type: 'MFB' },
-      { code: '51105', name: 'Living Trust Microfinance Bank', type: 'MFB' },
-      { code: '51118', name: 'Lovonus Microfinance Bank', type: 'MFB' },
-      { code: '51129', name: 'Mainstreet Microfinance Bank', type: 'MFB' },
-      { code: '51137', name: 'Malachy Microfinance Bank', type: 'MFB' },
-      { code: '51142', name: 'Manifold Microfinance Bank', type: 'MFB' },
-      { code: '51158', name: 'Mayfair Microfinance Bank', type: 'MFB' },
-      { code: '51164', name: 'Mayfresh Microfinance Bank', type: 'MFB' },
-      { code: '51179', name: 'Megapraise Microfinance Bank', type: 'MFB' },
-      { code: '51186', name: 'Meridian Microfinance Bank', type: 'MFB' },
-      { code: '51193', name: 'Microvis Microfinance Bank', type: 'MFB' },
-      { code: '51204', name: 'Midland Microfinance Bank', type: 'MFB' },
-      { code: '51217', name: 'MoneyBox Microfinance Bank', type: 'MFB' },
-      { code: '51225', name: 'Mutual Benefits / Mutual Trust MFB', type: 'MFB' },
-      { code: '51238', name: 'Nagarta Microfinance Bank', type: 'MFB' },
-      { code: '51246', name: 'Nasarawa Microfinance Bank', type: 'MFB' },
-      { code: '51253', name: 'Ndiorah Microfinance Bank', type: 'MFB' },
-      { code: '51261', name: 'New Dawn Microfinance Bank', type: 'MFB' },
-      { code: '51279', name: 'Nigerian Navy Microfinance Bank', type: 'MFB' },
-      { code: '51284', name: 'Nnew Women Microfinance Bank', type: 'MFB' },
-      { code: '51292', name: 'Nova Microfinance Bank', type: 'MFB' },
-      { code: '51308', name: 'NPF Microfinance Bank', type: 'MFB' },
-      { code: '51315', name: 'Oche Microfinance Bank', type: 'MFB' },
-      { code: '51324', name: 'Ohafia Microfinance Bank', type: 'MFB' },
-      { code: '51336', name: 'Okpoga Microfinance Bank', type: 'MFB' },
-      { code: '51349', name: 'Olabisi Onabanjo Univ MFB', type: 'MFB' },
-      { code: '51357', name: 'Olowolagba Microfinance Bank', type: 'MFB' },
-      { code: '51362', name: 'Oluchukwu Microfinance Bank', type: 'MFB' },
-      { code: '51375', name: 'Oluyole Microfinance Bank', type: 'MFB' },
-      { code: '51388', name: 'Oma Microfinance Bank', type: 'MFB' },
-      { code: '51394', name: 'Omiye Microfinance Bank', type: 'MFB' },
-      { code: '51407', name: 'Oraukwu Microfinance Bank', type: 'MFB' },
-      { code: '51412', name: 'Orisun Microfinance Bank', type: 'MFB' },
-      { code: '51428', name: 'Ospoly Microfinance Bank', type: 'MFB' },
-      { code: '51435', name: 'Otuo Microfinance Bank', type: 'MFB' },
       { code: '51441', name: 'Paga / SmartCash PSB', type: 'MFB / Digital' },
-      { code: '51459', name: 'Parkway Microfinance Bank', type: 'MFB' },
-      { code: '51463', name: 'PatrickGold Microfinance Bank', type: 'MFB' },
-      { code: '51478', name: 'Peace Microfinance Bank', type: 'MFB' },
-      { code: '51484', name: 'PecanTrust Microfinance Bank', type: 'MFB' },
-      { code: '51492', name: 'Pennywise Microfinance Bank', type: 'MFB' },
-      { code: '51506', name: 'Personal Trust Microfinance Bank', type: 'MFB' },
-      { code: '51519', name: 'Petra Microfinance Bank', type: 'MFB' },
-      { code: '51523', name: 'Pillar Microfinance Bank', type: 'MFB' },
-      { code: '51537', name: 'Platinum / Prestige Microfinance Bank', type: 'MFB' },
-      { code: '51548', name: 'Polyibadan Microfinance Bank', type: 'MFB' },
-      { code: '51552', name: 'Prestige Microfinance Bank', type: 'MFB' },
-      { code: '51564', name: 'Purplemoney Microfinance Bank', type: 'MFB' },
-      { code: '51571', name: 'Rahamaniyya Microfinance Bank', type: 'MFB' },
-      { code: '51589', name: 'Regent Microfinance Bank', type: 'MFB' },
-      { code: '51595', name: 'Reliance Microfinance Bank', type: 'MFB' },
-      { code: '51608', name: 'Renmoney Microfinance Bank', type: 'MFB / Digital' },
-      { code: '51614', name: 'Rephidim Microfinance Bank', type: 'MFB' },
-      { code: '51627', name: 'Richway Microfinance Bank', type: 'MFB' },
-      { code: '51632', name: 'Rigo Microfinance Bank', type: 'MFB' },
-      { code: '51645', name: 'Royal Exchange Microfinance Bank', type: 'MFB' },
-      { code: '51659', name: 'Rubies Microfinance Bank', type: 'MFB / Digital' },
-      { code: '51663', name: 'Safe Haven Microfinance Bank', type: 'MFB' },
-      { code: '51678', name: 'Sagamu Microfinance Bank', type: 'MFB' },
-      { code: '51684', name: 'Seedvest Microfinance Bank', type: 'MFB' },
-      { code: '51691', name: 'Shepherd Trust Microfinance Bank', type: 'MFB' },
-      { code: '51702', name: 'Sparkle Microfinance Bank', type: 'MFB / Digital' },
-      { code: '51715', name: 'Standard Microfinance Bank', type: 'MFB' },
-      { code: '51728', name: 'Stellas Microfinance Bank', type: 'MFB' },
-      { code: '51734', name: 'Sulaimon / Sultan Microfinance Bank', type: 'MFB' },
-      { code: '51749', name: 'TCF Microfinance Bank', type: 'MFB' },
-      { code: '51756', name: 'Thrive / Trive Microfinance Bank', type: 'MFB' },
-      { code: '51762', name: 'Titans Microfinance Bank', type: 'MFB' },
-      { code: '51778', name: 'Trident Microfinance Bank', type: 'MFB' },
-      { code: '51783', name: 'U & C Microfinance Bank', type: 'MFB' },
-      { code: '51795', name: 'Uhuru Microfinance Bank', type: 'MFB' },
-      { code: '51801', name: 'Unaab Microfinance Bank', type: 'MFB' },
-      { code: '51817', name: 'Uniben Microfinance Bank', type: 'MFB' },
-      { code: '51824', name: 'Unical Microfinance Bank', type: 'MFB' },
-      { code: '51839', name: 'Unilorin Microfinance Bank', type: 'MFB' },
-      { code: '51842', name: 'Unilag Microfinance Bank', type: 'MFB' },
-      { code: '51856', name: 'Unimaid Microfinance Bank', type: 'MFB' },
-      { code: '51863', name: 'Union Microfinance Bank', type: 'MFB' },
-      { code: '51878', name: 'Uniosun Microfinance Bank', type: 'MFB' },
-      { code: '51885', name: 'Uniuyo Microfinance Bank', type: 'MFB' },
-      { code: '51892', name: 'Uzondu Microfinance Bank', type: 'MFB' },
       { code: '51904', name: 'Vale / VFD Microfinance Bank', type: 'MFB / Digital' },
-      { code: '51918', name: 'Verdant Microfinance Bank', type: 'MFB' },
-      { code: '51925', name: 'Virtue Microfinance Bank', type: 'MFB' },
-      { code: '51931', name: 'Visa Microfinance Bank', type: 'MFB' },
-      { code: '51947', name: 'Wetland Microfinance Bank', type: 'MFB' },
-      { code: '51953', name: 'Winview Microfinance Bank', type: 'MFB' },
-      { code: '51968', name: 'Xpress / Xslnce Microfinance Bank', type: 'MFB' },
-      { code: '51972', name: 'YCT Microfinance Bank', type: 'MFB' },
-      { code: '51989', name: 'Yes Microfinance Bank', type: 'MFB' },
-      { code: '51994', name: 'Zaira Microfinance Bank', type: 'MFB' },
-      { code: '52001', name: 'Zerebe / Zik Microfinance Bank', type: 'MFB' },
     ];
 
     let allWithdrawalBanks = [...NIGERIAN_BANKS];
@@ -1882,17 +1688,14 @@
           }
         }
 
-        if (Array.isArray(data.wallets)) {
+        if (Array.isArray(data.wallets) && data.wallets.length > 0) {
           data.wallets.forEach((w) => {
             const sym = String(w.asset || '').toUpperCase();
-            const rawMinor = Number(w.availableBalanceMinor ?? w.balanceMinor ?? 0);
+            const rawMinor = Number(w.availableBalanceMinor ?? w.balanceMinor ?? w.balance_minor ?? 0);
             if (sym === 'NGN') {
-              appState.balances.NGN = rawMinor / 100;
+              appState.balances.NGN = normalizeMinorAmount(rawMinor, 'NGN');
             } else if (['USDT', 'USDC', 'BTC', 'ETH', 'BNB', 'SOL'].includes(sym)) {
-              const scale = getAssetPrecisionScale(sym);
-              appState.balances[sym] = scale === 1e6 && Number.isInteger(rawMinor) && rawMinor % 10000 === 0 && rawMinor < 1e8
-                ? rawMinor / 100
-                : rawMinor / scale;
+              appState.balances[sym] = normalizeMinorAmount(rawMinor, sym);
             }
           });
         }
@@ -2005,9 +1808,7 @@
             document.getElementById('verify-modal-passcode-input').value = '';
             return showToast(check.error || 'Passcode rejected by server.', 'error');
           }
-        } catch (err) {
-          // Allow local passcode if network hiccups
-        }
+        } catch (err) {}
       }
 
       const action = pendingTransactionAction;
@@ -2033,8 +1834,8 @@
       showToast('Transaction cancelled.', 'info');
     }
 
-    function requestAuthenticator2FA(summaryText, onVerified) {
-      if (!appState.user.twoFactorEnabled) {
+    function requestAuthenticator2FA(summaryText, onVerified, { forceOpen = false } = {}) {
+      if (!forceOpen && !appState.user.twoFactorEnabled) {
         showToast('Enable Google Authenticator 2FA in Settings before withdrawing to a bank or external wallet.', 'error');
         navigateTo('settings');
         const card = document.getElementById('settings-2fa-card');
@@ -2730,12 +2531,15 @@
               }),
             });
             const data = await parseJsonSafe(res);
-            if (!res.ok || !data.ok) {
-              showToast(data.error || 'Crypto purchase failed.', 'error');
+            if (!res.ok || data.ok === false) {
+              showToast(data.error || data.message || 'Crypto purchase failed.', 'error');
               return;
             }
-            await syncBackendWalletSnapshot();
             const credited = Number(data.cryptoCredited ?? out);
+            appState.balances.NGN = Math.max(0, Number(appState.balances.NGN || 0) - ngn);
+            appState.balances[asset] = Number(appState.balances[asset] || 0) + credited;
+            saveState();
+            await syncBackendWalletSnapshot();
             recordAndOpenInvoice({
               id: data.reference,
               type: 'BUY_CRYPTO',
@@ -2778,13 +2582,16 @@
               }),
             });
             const data = await parseJsonSafe(res);
-            if (!res.ok || !data.ok) {
-              showToast(data.error || 'Crypto sale failed.', 'error');
+            if (!res.ok || data.ok === false) {
+              showToast(data.error || data.message || 'Crypto sale failed.', 'error');
               return;
             }
+            const creditedNgn = Number(data.ngnCredited ?? netNgn);
+            appState.balances[asset] = Math.max(0, Number(appState.balances[asset] || 0) - amt);
+            appState.balances.NGN = Number(appState.balances.NGN || 0) + creditedNgn;
+            saveState();
             await syncBackendWalletSnapshot();
             checkTier1AutoFreeze();
-            const creditedNgn = Number(data.ngnCredited ?? netNgn);
             recordAndOpenInvoice({
               id: data.reference,
               type: 'SELL_CRYPTO',
@@ -2891,6 +2698,8 @@
                 showToast(data.error || 'Paystack deposit verification failed.', 'error');
                 return;
               }
+              appState.balances.NGN = Number(appState.balances.NGN || 0) + amountNgn;
+              saveState();
               await syncBackendWalletSnapshot();
               recordAndOpenInvoice({
                 id: data.reference || response.reference || reference,
@@ -3028,64 +2837,70 @@
         return showToast(`Insufficient ${balKey} balance (need $${totalUsd.toFixed(2)} incl. $${svcFee.toFixed(2)} fee + gas).`, 'error');
       }
 
-      if (!appState.user.twoFactorEnabled) {
-        showToast('Enable Google Authenticator 2FA in Settings before sending external crypto.', 'error');
-        navigateTo('settings');
-        const card = document.getElementById('settings-2fa-card');
-        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-
       const summaryText = `Send $${amountUsd.toFixed(2)} ${asset} (${net}) • Fee $${svcFee.toFixed(2)} + Gas $${gasUsd.toFixed(2)}`;
 
-      authorizeTransactionWithPasscode(summaryText, (verifiedPin) => {
-        requestAuthenticator2FA(summaryText, async (totpCode) => {
-          const amountMinor = Math.round(amountUsd * 100);
-          const gasFeeMinor = Math.round(gasUsd * 100);
-          let refId = null;
+      const submitExternalWithdraw = async (verifiedPin, totpCode) => {
+        const amountMinor = Math.round(amountUsd * 100);
+        const gasFeeMinor = Math.round(gasUsd * 100);
+        let refId = null;
 
-          if (appState.authToken) {
-            const res = await fetch(`${API_BASE_URL}/api/crypto/withdraw`, {
-              method: 'POST',
-              headers: getNikofyAuthHeaders(),
-              body: JSON.stringify({
-                asset,
-                network: net,
-                destinationAddress: destAddr,
-                amountMinor,
-                gasFeeMinor,
-                passcode: verifiedPin,
-                totpCode,
-                code: totpCode,
-                totp: totpCode,
-              }),
-            });
-            const data = await parseJsonSafe(res);
-            if (!res.ok || !data.ok) {
-              showToast(data.error || 'External withdrawal failed. Check your 6-digit Authenticator code.', 'error');
+        if (appState.authToken) {
+          const res = await fetch(`${API_BASE_URL}/api/crypto/withdraw`, {
+            method: 'POST',
+            headers: getNikofyAuthHeaders(),
+            body: JSON.stringify({
+              asset,
+              network: net,
+              destinationAddress: destAddr,
+              amountMinor,
+              gasFeeMinor,
+              passcode: verifiedPin,
+              totpCode,
+              code: totpCode,
+              totp: totpCode,
+            }),
+          });
+          const data = await parseJsonSafe(res);
+          if (!res.ok || data.ok === false) {
+            if (!totpCode && requiresAuthenticatorResponse(res, data)) {
+              appState.user.twoFactorEnabled = true;
+              saveState();
+              requestAuthenticator2FA(summaryText, (freshTotp) => submitExternalWithdraw(verifiedPin, freshTotp), { forceOpen: true });
               return false;
             }
-            refId = data.reference;
-            await syncBackendWalletSnapshot();
-          } else {
-            appState.balances[balKey] = Math.max(0, (appState.balances[balKey] || 0) - totalUsd);
+            showToast(data.error || data.message || 'External withdrawal failed. Check your 6-digit Authenticator code.', 'error');
+            return false;
           }
+          refId = data.reference;
+          appState.balances[balKey] = Math.max(0, Number(appState.balances[balKey] || 0) - totalUsd);
+          saveState();
+          await syncBackendWalletSnapshot();
+        } else {
+          appState.balances[balKey] = Math.max(0, (appState.balances[balKey] || 0) - totalUsd);
+        }
 
-          recordAndOpenInvoice({
-            ...(refId ? { id: refId } : {}),
-            type: 'EXTERNAL_CRYPTO',
-            title: `External ${asset} Send (${net})`,
-            subtitle: `To ${destAddr.slice(0, 8)}...${destAddr.slice(-6)}`,
-            amountText: `-$${totalUsd.toFixed(2)}`,
-            invoice: {
-              'Amount Sent': `$${amountUsd.toFixed(2)}`,
-              'Service Fee': `$${svcFee.toFixed(2)}`,
-              'Network Gas': `$${gasUsd.toFixed(2)}`,
-              'Total Debited': `$${totalUsd.toFixed(2)}`,
-            },
-          });
-          return true;
+        recordAndOpenInvoice({
+          ...(refId ? { id: refId } : {}),
+          type: 'EXTERNAL_CRYPTO',
+          title: `External ${asset} Send (${net})`,
+          subtitle: `To ${destAddr.slice(0, 8)}...${destAddr.slice(-6)}`,
+          amountText: `-$${totalUsd.toFixed(2)}`,
+          invoice: {
+            'Amount Sent': `$${amountUsd.toFixed(2)}`,
+            'Service Fee': `$${svcFee.toFixed(2)}`,
+            'Network Gas': `$${gasUsd.toFixed(2)}`,
+            'Total Debited': `$${totalUsd.toFixed(2)}`,
+          },
         });
+        return true;
+      };
+
+      authorizeTransactionWithPasscode(summaryText, (verifiedPin) => {
+        if (appState.user.twoFactorEnabled) {
+          requestAuthenticator2FA(summaryText, (totpCode) => submitExternalWithdraw(verifiedPin, totpCode));
+        } else {
+          submitExternalWithdraw(verifiedPin, '');
+        }
       });
     }
 
@@ -3138,7 +2953,7 @@
       const formattedAmt = isNgn ? formatNgn(amt) : `$${amt.toFixed(2)} ${asset}`;
       const formattedFee = isNgn ? '₦0.00 (Free)' : '$0.00 (Free)';
 
-      if (!appState.authToken && amt > (appState.balances[balKey] || 0)) {
+      if (amt > (appState.balances[balKey] || 0)) {
         return showToast(`Insufficient ${balKey} balance.`, 'error');
       }
 
@@ -3164,6 +2979,8 @@
               return;
             }
             refId = data.reference;
+            appState.balances[balKey] = Math.max(0, Number(appState.balances[balKey] || 0) - amt);
+            saveState();
             await syncBackendWalletSnapshot();
           } else {
             appState.balances[balKey] = Math.max(0, (appState.balances[balKey] || 0) - amt);
@@ -3226,67 +3043,73 @@
         return;
       }
 
-      if (!appState.user.twoFactorEnabled) {
-        showToast('Enable Google Authenticator 2FA in Settings before withdrawing to a bank account.', 'error');
-        navigateTo('settings');
-        const card = document.getElementById('settings-2fa-card');
-        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-
       const summaryText = `Withdraw ${formatNgn(amt)} to ${recipientAccountName} (${bank} • ${acct}) + ₦30 fee`;
 
-      authorizeTransactionWithPasscode(summaryText, (verifiedPin) => {
-        requestAuthenticator2FA(summaryText, async (totpCode) => {
-          const amountKobo = Math.round(amt * 100);
-          const feeKobo = Math.round(fee * 100);
-          let refId = null;
+      const submitBankWithdraw = async (verifiedPin, totpCode) => {
+        const amountKobo = Math.round(amt * 100);
+        const feeKobo = Math.round(fee * 100);
+        let refId = null;
 
-          if (appState.authToken) {
-            const res = await fetch(`${API_BASE_URL}/api/ngn/withdraw`, {
-              method: 'POST',
-              headers: getNikofyAuthHeaders(),
-              body: JSON.stringify({
-                bankCode,
-                bankName: bank,
-                accountNumber: acct,
-                accountName: recipientAccountName,
-                amountKobo,
-                feeKobo,
-                passcode: verifiedPin,
-                totpCode,
-                code: totpCode,
-                totp: totpCode,
-              }),
-            });
-            const data = await parseJsonSafe(res);
-            if (!res.ok || !data.ok) {
-              showToast(data.error || 'Bank withdrawal failed. Check your KYC status and 6-digit Authenticator code.', 'error');
+        if (appState.authToken) {
+          const res = await fetch(`${API_BASE_URL}/api/ngn/withdraw`, {
+            method: 'POST',
+            headers: getNikofyAuthHeaders(),
+            body: JSON.stringify({
+              bankCode,
+              bankName: bank,
+              accountNumber: acct,
+              accountName: recipientAccountName,
+              amountKobo,
+              feeKobo,
+              passcode: verifiedPin,
+              totpCode,
+              code: totpCode,
+              totp: totpCode,
+            }),
+          });
+          const data = await parseJsonSafe(res);
+          if (!res.ok || data.ok === false) {
+            if (!totpCode && requiresAuthenticatorResponse(res, data)) {
+              appState.user.twoFactorEnabled = true;
+              saveState();
+              requestAuthenticator2FA(summaryText, (freshTotp) => submitBankWithdraw(verifiedPin, freshTotp), { forceOpen: true });
               return false;
             }
-            refId = data.reference;
-            await syncBackendWalletSnapshot();
-          } else {
-            appState.balances.NGN -= (amt + fee);
+            showToast(data.error || data.message || 'Bank withdrawal failed. Check your KYC status and 6-digit Authenticator code.', 'error');
+            return false;
           }
+          refId = data.reference;
+          appState.balances.NGN = Math.max(0, Number(appState.balances.NGN || 0) - (amt + fee));
+          saveState();
+          await syncBackendWalletSnapshot();
+        } else {
+          appState.balances.NGN -= (amt + fee);
+        }
 
-          recordAndOpenInvoice({
-            ...(refId ? { id: refId } : {}),
-            type: 'BANK_WITHDRAWAL',
-            title: `Bank Withdrawal (${bank})`,
-            subtitle: `${recipientAccountName} • ${acct} • Fee ₦30.00`,
-            amountText: `-${formatNgn(amt + fee)}`,
-            invoice: {
-              'Account Name': recipientAccountName,
-              Bank: bank,
-              Account: acct,
-              'Withdrawal Amount': formatNgn(amt),
-              'Nikofy.ng Fee': '₦30.00',
-              'Total Debited': formatNgn(amt + fee),
-            },
-          });
-          return true;
+        recordAndOpenInvoice({
+          ...(refId ? { id: refId } : {}),
+          type: 'BANK_WITHDRAWAL',
+          title: `Bank Withdrawal (${bank})`,
+          subtitle: `${recipientAccountName} • ${acct} • Fee ₦30.00`,
+          amountText: `-${formatNgn(amt + fee)}`,
+          invoice: {
+            'Account Name': recipientAccountName,
+            Bank: bank,
+            Account: acct,
+            'Withdrawal Amount': formatNgn(amt),
+            'Nikofy.ng Fee': '₦30.00',
+            'Total Debited': formatNgn(amt + fee),
+          },
         });
+        return true;
+      };
+
+      authorizeTransactionWithPasscode(summaryText, (verifiedPin) => {
+        if (appState.user.twoFactorEnabled) {
+          requestAuthenticator2FA(summaryText, (totpCode) => submitBankWithdraw(verifiedPin, totpCode));
+        } else {
+          submitBankWithdraw(verifiedPin, '');
+        }
       });
     }
 
@@ -3506,6 +3329,8 @@
 
           const refId = data.reference || data.data?.reference || null;
           const serverToken = data.tokenCode || data.token || data.meterToken || data.data?.token || null;
+          appState.balances.NGN = Math.max(0, Number(appState.balances.NGN || 0) - amt);
+          saveState();
           await syncBackendWalletSnapshot();
 
           const token = cat === 'ELECTRICITY' && meterType === 'PREPAID'
