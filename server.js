@@ -514,6 +514,18 @@ async function ensureSchemaTables() {
       UNIQUE (user_id, spend_date)
     );
 
+    CREATE TABLE IF NOT EXISTS wallet_swaps (
+      id SERIAL PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_asset TEXT NOT NULL,
+      to_asset TEXT NOT NULL,
+      from_amount_minor BIGINT NOT NULL,
+      to_amount_minor BIGINT NOT NULL,
+      rate NUMERIC(18, 6) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS p2p_transfers (
       id SERIAL PRIMARY KEY,
       reference TEXT UNIQUE NOT NULL,
@@ -1006,6 +1018,112 @@ app.get("/api/wallets", requireAuth, async (req, res) => {
       userId: snapshot.user.id,
       accountStatus: snapshot.user.account_status,
       freezeReason: snapshot.user.freeze_reason || null,
+      wallets: snapshot.wallets,
+      dailySpend: snapshot.dailySpend
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// PERSISTENT NGN <-> CRYPTO BUY/SELL/SWAP ENDPOINT
+app.post("/api/trade/swap", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  const {
+    fromAsset,
+    toAsset,
+    fromAmountMinor,
+    toAmountMinor,
+    rate = 1,
+    passcode
+  } = req.body || {};
+
+  const srcAsset = String(fromAsset || "").trim().toUpperCase();
+  const dstAsset = String(toAsset || "").trim().toUpperCase();
+  const debitMinor = Math.round(Number(fromAmountMinor));
+  const creditMinor = Math.round(Number(toAmountMinor));
+
+  if (!ASSET_NETWORK_MAP[srcAsset] || !ASSET_NETWORK_MAP[dstAsset] || srcAsset === dstAsset) {
+    return res.status(400).json({ ok: false, error: "Valid distinct source and destination assets are required." });
+  }
+  if (!Number.isInteger(debitMinor) || debitMinor <= 0 || !Number.isInteger(creditMinor) || creditMinor <= 0) {
+    return res.status(400).json({ ok: false, error: "Positive swap amounts are required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await provisionUserDefaults(client, userId);
+
+    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
+    if (!pinCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+    }
+
+    const srcRes = await client.query(
+      `SELECT id, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = $2
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [userId, srcAsset]
+    );
+    const dstRes = await client.query(
+      `SELECT id, balance_minor, available_balance_minor
+       FROM wallets WHERE user_id = $1 AND asset = $2
+       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+      [userId, dstAsset]
+    );
+
+    if (!srcRes.rows.length || !dstRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "Source or destination wallet not found." });
+    }
+
+    const srcWallet = srcRes.rows[0];
+    const dstWallet = dstRes.rows[0];
+
+    if (Number(srcWallet.available_balance_minor) < debitMinor) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: `Insufficient ${srcAsset} balance.`,
+        requiredMinor: debitMinor,
+        availableMinor: Number(srcWallet.available_balance_minor)
+      });
+    }
+
+    const nextSrcBalance = Number(srcWallet.balance_minor) - debitMinor;
+    const nextDstBalance = Number(dstWallet.balance_minor) + creditMinor;
+
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextSrcBalance, srcWallet.id]
+    );
+    await client.query(
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextDstBalance, dstWallet.id]
+    );
+
+    const reference = `SWP_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    await client.query(
+      `INSERT INTO wallet_swaps (reference, user_id, from_asset, to_asset, from_amount_minor, to_amount_minor, rate)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [reference, userId, srcAsset, dstAsset, debitMinor, creditMinor, Number(rate) || 1]
+    );
+
+    const snapshot = await loadUserWalletSnapshot(client, userId);
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      reference,
+      fromAsset: srcAsset,
+      toAsset: dstAsset,
+      fromAmountMinor: debitMinor,
+      toAmountMinor: creditMinor,
       wallets: snapshot.wallets,
       dailySpend: snapshot.dailySpend
     });
@@ -1808,6 +1926,22 @@ app.get("/api/ledger", requireAuth, async (req, res) => {
         UNION ALL
 
         SELECT
+          s.reference AS id,
+          'WALLET_SWAP' AS type,
+          CONCAT('Swap ', s.from_asset, ' → ', s.to_asset) AS title,
+          CONCAT('Rate ', s.rate) AS subtitle,
+          CASE WHEN s.to_asset = 'NGN'
+            THEN CONCAT('+₦', TO_CHAR(s.to_amount_minor / 100.0, 'FM999,999,990.00'))
+            ELSE CONCAT('+$', TO_CHAR(s.to_amount_minor / 100.0, 'FM999,999,990.00'), ' ', s.to_asset)
+          END AS amount_text,
+          'COMPLETED' AS status,
+          s.created_at
+        FROM wallet_swaps s
+        WHERE s.user_id = $1
+
+        UNION ALL
+
+        SELECT
           p.reference AS id,
           'P2P_TRANSFER' AS type,
           CASE WHEN p.sender_user_id = $1
@@ -2065,7 +2199,6 @@ app.post("/api/webhooks/nowpayments", async (req, res) => {
 
     const wallet = walletRes.rows[0];
     const nextBalance = Number(wallet.balance_minor) + creditMinor;
-    const nextAvailable = Number(wallet.available_balance_minor) + creditMinor;
 
     await client.query(
       `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
