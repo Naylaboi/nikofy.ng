@@ -769,7 +769,10 @@
             </div>
 
             <div id="data-plan-container" class="space-y-1.5">
-              <label for="bill-data-plan" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Select Live Data Bundle</label>
+              <div class="flex items-center justify-between">
+                <label id="bill-plan-label" for="bill-data-plan" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Select Live Data Bundle</label>
+                <span id="bill-variations-status" class="text-[11px] font-semibold text-amber-600 dark:text-amber-400"></span>
+              </div>
               <select id="bill-data-plan" onchange="syncDataPlanPrice()" class="w-full bg-white dark:bg-nikofy-darkBg border border-slate-300 dark:border-nikofy-darkBorder rounded-xl px-3.5 py-3 text-sm font-bold text-nikofy-green dark:text-emerald-400 outline-none"></select>
             </div>
 
@@ -1129,7 +1132,6 @@
 
     // Comprehensive Nigerian Commercial, Non-Interest, Digital/PSB & Microfinance Banks
     const NIGERIAN_BANKS = [
-      // Commercial & Non-Interest Banks
       { code: '044', name: 'Access Bank Plc', type: 'Commercial' },
       { code: '063', name: 'Access Bank (Diamond)', type: 'Commercial' },
       { code: '108', name: 'Alpha Morgan Bank', type: 'Commercial' },
@@ -1160,8 +1162,6 @@
       { code: '035', name: 'Wema Bank', type: 'Commercial' },
       { code: '057', name: 'Zenith Bank', type: 'Commercial' },
       { code: '000037', name: 'Alternative Bank (Sterling Alternative)', type: 'Non-Interest' },
-
-      // Digital, PSB & Microfinance Banks (MFB)
       { code: '999992', name: 'OPay Digital Services Limited (OPay)', type: 'MFB / Digital' },
       { code: '50211', name: 'Kuda Microfinance Bank', type: 'MFB / Digital' },
       { code: '50515', name: 'Moniepoint Microfinance Bank', type: 'MFB / Digital' },
@@ -1291,7 +1291,7 @@
       { code: '51548', name: 'Polyibadan Microfinance Bank', type: 'MFB' },
       { code: '51552', name: 'Prestige Microfinance Bank', type: 'MFB' },
       { code: '51564', name: 'Purplemoney Microfinance Bank', type: 'MFB' },
-      { code: '51571', name: ' Rahamaniyya Microfinance Bank', type: 'MFB' },
+      { code: '51571', name: 'Rahamaniyya Microfinance Bank', type: 'MFB' },
       { code: '51589', name: 'Regent Microfinance Bank', type: 'MFB' },
       { code: '51595', name: 'Reliance Microfinance Bank', type: 'MFB' },
       { code: '51608', name: 'Renmoney Microfinance Bank', type: 'MFB / Digital' },
@@ -1347,6 +1347,7 @@
       isSandbox: false,
     };
     let accountResolveTimer = null;
+    let activeBillVariations = [];
 
     const MARKET_COINS = {
       BTC: { name: 'Bitcoin (BTC / NGN)', price: 81186785, change: '-2.70%', positive: false, points: [83500000, 83100000, 82600000, 82900000, 82000000, 81500000, 81186785] },
@@ -1358,22 +1359,22 @@
 
     const DATA_PLANS = {
       AIRTEL: [
-        { label: 'Airtel 1GB (30 Days) — ₦500', price: 500 },
-        { label: 'Airtel 2GB (30 Days) — ₦600', price: 600 },
-        { label: 'Airtel 5GB (30 Days) — ₦1,500', price: 1500 },
+        { label: 'Airtel 1GB (30 Days) — ₦500', price: 500, variationCode: '' },
+        { label: 'Airtel 2GB (30 Days) — ₦600', price: 600, variationCode: '' },
+        { label: 'Airtel 5GB (30 Days) — ₦1,500', price: 1500, variationCode: '' },
       ],
       MTN: [
-        { label: 'MTN 1GB (30 Days) — ₦500', price: 500 },
-        { label: 'MTN 2GB (30 Days) — ₦1,000', price: 1000 },
-        { label: 'MTN 5GB (30 Days) — ₦2,500', price: 2500 },
+        { label: 'MTN 1GB (30 Days) — ₦500', price: 500, variationCode: '' },
+        { label: 'MTN 2GB (30 Days) — ₦1,000', price: 1000, variationCode: '' },
+        { label: 'MTN 5GB (30 Days) — ₦2,500', price: 2500, variationCode: '' },
       ],
       GLO: [
-        { label: 'Glo 1GB (30 Days) — ₦450', price: 450 },
-        { label: 'Glo 2GB (30 Days) — ₦900', price: 900 },
+        { label: 'Glo 1GB (30 Days) — ₦450', price: 450, variationCode: '' },
+        { label: 'Glo 2GB (30 Days) — ₦900', price: 900, variationCode: '' },
       ],
       '9MOBILE': [
-        { label: '9mobile 1GB (30 Days) — ₦400', price: 400 },
-        { label: '9mobile 2GB (30 Days) — ₦800', price: 800 },
+        { label: '9mobile 1GB (30 Days) — ₦400', price: 400, variationCode: '' },
+        { label: '9mobile 2GB (30 Days) — ₦800', price: 800, variationCode: '' },
       ],
     };
 
@@ -3030,8 +3031,71 @@
     }
 
     // =====================================================================
-    // LIVE DATA PLANS & BILL PAYMENTS (REAL BACKEND CALL TO RENDER)
+    // LIVE DATA PLANS, CABLE BOUQUETS & BILL PAYMENTS (RENDER + VTPASS)
     // =====================================================================
+    async function loadLiveBillVariations(cat, providerCode) {
+      activeBillVariations = [];
+      const statusEl = document.getElementById('bill-variations-status');
+      const planSel = document.getElementById('bill-data-plan');
+      if (!planSel) return;
+
+      if (!['DATA', 'CABLE_TV'].includes(cat)) {
+        if (statusEl) statusEl.textContent = '';
+        return;
+      }
+
+      const fallbackList = cat === 'DATA'
+        ? (DATA_PLANS[providerCode] || DATA_PLANS.AIRTEL)
+        : [];
+
+      const renderOptionsList = (items, statusMessage) => {
+        planSel.innerHTML = items.map((pl, i) => `<option value="${i}">${escapeHtmlText(pl.label)}</option>`).join('');
+        if (statusEl) statusEl.textContent = statusMessage || '';
+        syncDataPlanPrice();
+      };
+
+      if (!appState.authToken) {
+        activeBillVariations = fallbackList;
+        renderOptionsList(fallbackList, fallbackList.length ? 'Default plans' : 'Sign in for live bouquets');
+        return;
+      }
+
+      if (statusEl) statusEl.textContent = 'Syncing plans...';
+      try {
+        const url = `${API_BASE_URL}/api/bills/variations?category=${encodeURIComponent(cat)}&providerCode=${encodeURIComponent(providerCode)}`;
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: getNikofyAuthHeaders(),
+        });
+        const data = await parseJsonSafe(res);
+        const rawVars = Array.isArray(data?.variations) ? data.variations : (Array.isArray(data?.data?.variations) ? data.data.variations : []);
+
+        if (res.ok && data.ok !== false && rawVars.length > 0) {
+          activeBillVariations = rawVars.map((v) => {
+            const price = Number(v.variation_amount || v.amount || 0);
+            const cleanName = String(v.name || v.variation_code || 'Plan').trim();
+            const label = price > 0 ? `${cleanName} — ${formatNgn(price)}` : cleanName;
+            return {
+              label,
+              planName: cleanName,
+              price,
+              variationCode: String(v.variation_code || v.code || '').trim(),
+            };
+          });
+          renderOptionsList(activeBillVariations, `${activeBillVariations.length} live plans`);
+          return;
+        }
+      } catch (err) {
+        console.warn('Live bill variations fallback:', err.message || err);
+      }
+
+      activeBillVariations = fallbackList;
+      renderOptionsList(
+        fallbackList,
+        fallbackList.length ? 'Using preset plans' : 'Enter amount manually'
+      );
+    }
+
     function setBillCategory(cat) {
       appState.ui.billCategory = cat;
       saveState();
@@ -3043,8 +3107,13 @@
       });
       const sel = document.getElementById('bill-provider');
       sel.innerHTML = BILL_PROVIDERS[cat].map((p) => `<option value="${p.code}">${p.name}</option>`).join('');
+      const hasPlanDropdown = ['DATA', 'CABLE_TV'].includes(cat);
+      const planLabelEl = document.getElementById('bill-plan-label');
+      if (planLabelEl) {
+        planLabelEl.textContent = cat === 'CABLE_TV' ? 'Select TV Bouquet / Plan' : 'Select Live Data Bundle';
+      }
       document.getElementById('electricity-meter-type-container').classList.toggle('hidden', cat !== 'ELECTRICITY');
-      document.getElementById('data-plan-container').classList.toggle('hidden', cat !== 'DATA');
+      document.getElementById('data-plan-container').classList.toggle('hidden', !hasPlanDropdown);
       document.getElementById('bill-amount-container').classList.toggle('hidden', cat === 'DATA');
       handleBillProviderChange();
     }
@@ -3056,18 +3125,27 @@
       document.getElementById('bill-customer-label').textContent = p.label;
       document.getElementById('bill-customer-id').placeholder = p.sample;
 
-      if (cat === 'DATA') {
-        const plans = DATA_PLANS[code] || DATA_PLANS.AIRTEL;
-        document.getElementById('bill-data-plan').innerHTML = plans.map((pl, i) => `<option value="${i}">${pl.label}</option>`).join('');
-        syncDataPlanPrice();
+      if (['DATA', 'CABLE_TV'].includes(cat)) {
+        loadLiveBillVariations(cat, code);
       }
     }
 
     function syncDataPlanPrice() {
+      const cat = appState.ui.billCategory;
       const code = document.getElementById('bill-provider').value;
       const idx = Number(document.getElementById('bill-data-plan').value || 0);
-      const plan = (DATA_PLANS[code] || DATA_PLANS.AIRTEL)[idx];
-      if (plan) document.getElementById('bill-amount-ngn').value = plan.price;
+      const sourceList = activeBillVariations.length > 0
+        ? activeBillVariations
+        : (DATA_PLANS[code] || DATA_PLANS.AIRTEL);
+      const plan = sourceList[idx];
+      if (plan && Number(plan.price) > 0) {
+        document.getElementById('bill-amount-ngn').value = Number(plan.price);
+        if (cat === 'CABLE_TV') {
+          document.getElementById('bill-amount-container').classList.remove('hidden');
+        }
+      } else if (cat === 'CABLE_TV') {
+        document.getElementById('bill-amount-container').classList.remove('hidden');
+      }
     }
 
     function executeBillPayment(e) {
@@ -3103,12 +3181,19 @@
       }
 
       let planLabel = meterType ? `${code} ${meterType}` : `${code} ${cat}`;
-      if (cat === 'DATA') {
-        const plans = DATA_PLANS[code] || DATA_PLANS.AIRTEL;
+      let variationCode = undefined;
+
+      if (['DATA', 'CABLE_TV'].includes(cat)) {
+        const sourceList = activeBillVariations.length > 0
+          ? activeBillVariations
+          : (DATA_PLANS[code] || DATA_PLANS.AIRTEL);
         const idx = Number(document.getElementById('bill-data-plan').value || 0);
-        const selectedPlan = plans[idx] || plans[0];
-        if (selectedPlan && selectedPlan.label) {
-          planLabel = selectedPlan.label;
+        const selectedPlan = sourceList[idx] || sourceList[0];
+        if (selectedPlan) {
+          planLabel = selectedPlan.label || planLabel;
+          if (selectedPlan.variationCode) {
+            variationCode = selectedPlan.variationCode;
+          }
         }
       }
 
@@ -3137,9 +3222,11 @@
             body: JSON.stringify({
               category: cat,
               provider: code,
+              providerCode: code,
               meterType,
               customerId: cust,
               planLabel,
+              variationCode,
               amountKobo,
               passcode: verifiedPin,
             }),
@@ -3161,7 +3248,7 @@
           setBillDiagnostic(`Render 200 OK: ${JSON.stringify(data)}`);
 
           const refId = data.reference || data.data?.reference || null;
-          const serverToken = data.token || data.meterToken || data.data?.token || null;
+          const serverToken = data.tokenCode || data.token || data.meterToken || data.data?.token || null;
           await syncBackendWalletSnapshot();
 
           const token = cat === 'ELECTRICITY' && meterType === 'PREPAID'
@@ -3170,7 +3257,7 @@
           const inv = {
             Biller: code,
             ...(meterType ? { 'Meter Type': meterType } : {}),
-            ...(cat === 'DATA' ? { 'Data Plan': planLabel } : { Category: cat }),
+            ...(['DATA', 'CABLE_TV'].includes(cat) ? { 'Plan / Bouquet': planLabel } : { Category: cat }),
             'Customer ID': cust,
             'Amount Paid': formatNgn(amt),
           };
@@ -3179,7 +3266,7 @@
           recordAndOpenInvoice({
             ...(refId ? { id: refId } : {}),
             type: 'BILL_PAYMENT',
-            title: cat === 'DATA' ? `${planLabel}` : `${code} ${meterType || cat} Paid`,
+            title: ['DATA', 'CABLE_TV'].includes(cat) ? `${planLabel}` : `${code} ${meterType || cat} Paid`,
             subtitle: token ? `Meter ${cust} • Token: ${token}` : `ID: ${cust} • ${planLabel}`,
             amountText: `-${formatNgn(amt)}`,
             invoice: inv,
