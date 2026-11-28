@@ -924,7 +924,6 @@ async function executeSwapTx(client, userId, rawBody = {}) {
   let debitMinor = Math.round(Number(rawBody.fromAmountMinor));
   let creditMinor = Math.round(Number(rawBody.toAmountMinor));
 
-  // Fallback 1: NGN -> Crypto using amountKobo or amountNaira or ngnAmount
   if ((!Number.isInteger(debitMinor) || debitMinor <= 0) && srcAsset === "NGN") {
     const koboCandidate =
       rawBody.amountKobo !== undefined && rawBody.amountKobo !== null && rawBody.amountKobo !== ""
@@ -948,7 +947,6 @@ async function executeSwapTx(client, userId, rawBody = {}) {
     }
   }
 
-  // Fallback 2: Crypto -> NGN
   if ((!Number.isInteger(debitMinor) || debitMinor <= 0) && srcAsset !== "NGN" && dstAsset === "NGN") {
     const usdCandidate =
       rawBody.amountUsd !== undefined && rawBody.amountUsd !== null && rawBody.amountUsd !== ""
@@ -969,7 +967,6 @@ async function executeSwapTx(client, userId, rawBody = {}) {
     }
   }
 
-  // Fallback 3: Generic fromAmount / toAmount in major units
   if (!Number.isInteger(debitMinor) || debitMinor <= 0) {
     const majorFrom = Number(rawBody.fromAmount);
     if (Number.isFinite(majorFrom) && majorFrom > 0) {
@@ -989,9 +986,12 @@ async function executeSwapTx(client, userId, rawBody = {}) {
 
   await provisionUserDefaults(client, userId);
 
-  const pinCheck = await verifyUserPasscodeTx(client, userId, rawBody.passcode, { requiredIfUnset: false });
-  if (!pinCheck.ok) {
-    return { ok: false, status: pinCheck.status, error: pinCheck.error };
+  // Only enforce passcode on swaps if a non-empty passcode was explicitly provided
+  if (rawBody.passcode !== undefined && rawBody.passcode !== null && String(rawBody.passcode).trim() !== "") {
+    const pinCheck = await verifyUserPasscodeTx(client, userId, rawBody.passcode, { requiredIfUnset: false });
+    if (!pinCheck.ok) {
+      return { ok: false, status: pinCheck.status, error: pinCheck.error };
+    }
   }
 
   const srcRes = await client.query(
