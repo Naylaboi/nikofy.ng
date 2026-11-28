@@ -7,20 +7,29 @@ const { Pool } = require("pg");
 const otplib = require("otplib");
 
 function getTotpHelpers() {
-  const generateSecret =
-    typeof otplib.generateSecret === "function"
-      ? otplib.generateSecret
-      : () => {
-          throw new Error("otplib generateSecret unavailable");
-        };
+  const authenticator = otplib.authenticator;
 
-  const generateURI =
-    typeof otplib.generateURI === "function"
-      ? otplib.generateURI
-      : ({ issuer, label, secret }) =>
-          `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(
-            label
-          )}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent(issuer)}`;
+  const generateSecret = () => {
+    if (typeof otplib.generateSecret === "function") {
+      return otplib.generateSecret();
+    }
+    if (authenticator && typeof authenticator.generateSecret === "function") {
+      return authenticator.generateSecret();
+    }
+    throw new Error("otplib generateSecret unavailable");
+  };
+
+  const generateURI = ({ issuer, label, secret }) => {
+    if (typeof otplib.generateURI === "function") {
+      return otplib.generateURI({ issuer, label, secret });
+    }
+    if (authenticator && typeof authenticator.keyuri === "function") {
+      return authenticator.keyuri(label, issuer, secret);
+    }
+    return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(
+      label
+    )}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent(issuer)}`;
+  };
 
   const verifyToken = async ({ secret, token }) => {
     if (typeof otplib.verify === "function") {
@@ -30,6 +39,10 @@ function getTotpHelpers() {
         epochTolerance: 30
       });
       return Boolean(res && res.valid);
+    }
+    if (authenticator && typeof authenticator.verify === "function") {
+      authenticator.options = { ...(authenticator.options || {}), window: 1 };
+      return Boolean(authenticator.verify({ token, secret }));
     }
     throw new Error("otplib verify unavailable");
   };
@@ -442,6 +455,7 @@ async function ensureSchemaTables() {
       passcode_failed_attempts INTEGER NOT NULL DEFAULT 0,
       passcode_locked_until TIMESTAMPTZ,
       totp_secret TEXT,
+      totp_pending_secret TEXT,
       totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
       account_status TEXT NOT NULL DEFAULT 'ACTIVE',
       freeze_reason TEXT,
@@ -452,6 +466,7 @@ async function ensureSchemaTables() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS normalized_phone TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_pending_secret TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
@@ -1969,8 +1984,8 @@ app.post("/api/webhooks/nowpayments", async (req, res) => {
     const nextAvailable = Number(wallet.available_balance_minor) + creditMinor;
 
     await client.query(
-      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $2 WHERE id = $3`,
-      [nextBalance, nextAvailable, wallet.id]
+      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+      [nextBalance, wallet.id]
     );
 
     const kycRes = await client.query(
@@ -2621,7 +2636,7 @@ app.post("/api/security/totp/setup", requireAuth, async (req, res) => {
 
     await pool.query(
       `UPDATE users
-       SET totp_secret = $1, totp_enabled = FALSE, updated_at = NOW()
+       SET totp_pending_secret = $1, updated_at = NOW()
        WHERE id = $2`,
       [secret, userId]
     );
@@ -2646,25 +2661,29 @@ app.post("/api/security/totp/verify", requireAuth, async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT totp_secret, totp_enabled FROM users WHERE id = $1`,
+      `SELECT totp_secret, totp_pending_secret, totp_enabled FROM users WHERE id = $1`,
       [userId]
     );
-    const secret = rows[0]?.totp_secret;
-    if (!secret) {
+    const user = rows[0];
+    const secretToVerify = user?.totp_pending_secret || user?.totp_secret;
+    if (!secretToVerify) {
       return res.status(400).json({ ok: false, error: "Authenticator has not been set up yet." });
     }
 
-    const verified = await verifyToken({ secret, token });
+    const verified = await verifyToken({ secret: secretToVerify, token });
     if (!verified) {
       return res.status(401).json({ ok: false, error: "Invalid or expired authenticator code." });
     }
 
-    if (!rows[0]?.totp_enabled) {
-      await pool.query(
-        `UPDATE users SET totp_enabled = TRUE, updated_at = NOW() WHERE id = $1`,
-        [userId]
-      );
-    }
+    await pool.query(
+      `UPDATE users
+       SET totp_secret = $1,
+           totp_pending_secret = NULL,
+           totp_enabled = TRUE,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [secretToVerify, userId]
+    );
 
     return res.json({ ok: true, verified: true, totpEnabled: true });
   } catch (err) {
@@ -2680,15 +2699,23 @@ app.post("/api/security/totp/disable", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Enter a 6-digit authenticator code to disable 2FA." });
     }
 
-    const { rows } = await pool.query(`SELECT totp_secret FROM users WHERE id = $1`, [userId]);
-    const secret = rows[0]?.totp_secret;
+    const { rows } = await pool.query(
+      `SELECT totp_secret, totp_pending_secret FROM users WHERE id = $1`,
+      [userId]
+    );
+    const secret = rows[0]?.totp_secret || rows[0]?.totp_pending_secret;
     const valid = secret ? await verifyToken({ secret, token }) : false;
     if (!valid) {
       return res.status(401).json({ ok: false, error: "Invalid authenticator code." });
     }
 
     await pool.query(
-      `UPDATE users SET totp_secret = NULL, totp_enabled = FALSE, updated_at = NOW() WHERE id = $1`,
+      `UPDATE users
+       SET totp_secret = NULL,
+           totp_pending_secret = NULL,
+           totp_enabled = FALSE,
+           updated_at = NOW()
+       WHERE id = $1`,
       [userId]
     );
 
