@@ -4,9 +4,40 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const sgMail = require("@sendgrid/mail");
 const { Pool } = require("pg");
-const { authenticator } = require("otplib");
+const otplib = require("otplib");
 
-authenticator.options = { window: 1 };
+function getTotpHelpers() {
+  const generateSecret =
+    typeof otplib.generateSecret === "function"
+      ? otplib.generateSecret
+      : () => {
+          throw new Error("otplib generateSecret unavailable");
+        };
+
+  const generateURI =
+    typeof otplib.generateURI === "function"
+      ? otplib.generateURI
+      : ({ issuer, label, secret }) =>
+          `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(
+            label
+          )}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent(issuer)}`;
+
+  const verifyToken = async ({ secret, token }) => {
+    if (typeof otplib.verify === "function") {
+      const res = await otplib.verify({
+        secret,
+        token,
+        epochTolerance: 30
+      });
+      return Boolean(res && res.valid);
+    }
+    throw new Error("otplib verify unavailable");
+  };
+
+  return { generateSecret, generateURI, verifyToken };
+}
+
+const { generateSecret, generateURI, verifyToken } = getTotpHelpers();
 
 const app = express();
 
@@ -2580,9 +2611,13 @@ app.post("/api/security/totp/setup", requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: "User not found." });
     }
 
-    const secret = authenticator.generateSecret();
+    const secret = generateSecret();
     const email = rows[0].email;
-    const otpauthUrl = authenticator.keyuri(email, "Nikofy", secret);
+    const otpauthUrl = generateURI({
+      issuer: "Nikofy",
+      label: email,
+      secret
+    });
 
     await pool.query(
       `UPDATE users
@@ -2619,7 +2654,7 @@ app.post("/api/security/totp/verify", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Authenticator has not been set up yet." });
     }
 
-    const verified = authenticator.verify({ token, secret });
+    const verified = await verifyToken({ secret, token });
     if (!verified) {
       return res.status(401).json({ ok: false, error: "Invalid or expired authenticator code." });
     }
@@ -2647,7 +2682,8 @@ app.post("/api/security/totp/disable", requireAuth, async (req, res) => {
 
     const { rows } = await pool.query(`SELECT totp_secret FROM users WHERE id = $1`, [userId]);
     const secret = rows[0]?.totp_secret;
-    if (!secret || !authenticator.verify({ token, secret })) {
+    const valid = secret ? await verifyToken({ secret, token }) : false;
+    if (!valid) {
       return res.status(401).json({ ok: false, error: "Invalid authenticator code." });
     }
 
