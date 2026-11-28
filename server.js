@@ -808,6 +808,76 @@ async function verifyUserPasscodeTx(client, dbUserId, passcode, { requiredIfUnse
   return { ok: true };
 }
 
+async function verifyUserTotpTx(client, dbUserId, rawToken, { requiredWhenEnabled = true } = {}) {
+  const { rows } = await client.query(
+    `SELECT id, totp_secret, totp_enabled, account_status
+     FROM users
+     WHERE id = $1
+     FOR UPDATE`,
+    [dbUserId]
+  );
+  if (!rows.length) {
+    return { ok: false, status: 404, error: "User not found." };
+  }
+  const user = rows[0];
+  if (user.account_status !== "ACTIVE") {
+    return { ok: false, status: 403, error: `Account is ${user.account_status}.` };
+  }
+  if (!user.totp_enabled) {
+    if (!requiredWhenEnabled) {
+      return { ok: true, skipped: true };
+    }
+    return {
+      ok: false,
+      status: 403,
+      error: "Enable Google Authenticator 2FA first to complete this action."
+    };
+  }
+  if (!user.totp_secret) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Authenticator secret is missing. Re-setup Google Authenticator 2FA."
+    };
+  }
+  const token = String(rawToken || "").trim();
+  if (!/^\d{6}$/.test(token)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Enter a 6-digit Google Authenticator code to confirm this action."
+    };
+  }
+  const valid = await verifyToken({ secret: user.totp_secret, token });
+  if (!valid) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Invalid or expired 6-digit Google Authenticator code."
+    };
+  }
+  return { ok: true };
+}
+
+async function verifyKycApprovedTx(client, dbUserId) {
+  await provisionUserDefaults(client, dbUserId);
+  const { rows } = await client.query(
+    `SELECT tier, kyc_status
+     FROM kyc_profiles
+     WHERE user_id = $1`,
+    [dbUserId]
+  );
+  const kyc = rows[0];
+  if (!kyc || String(kyc.kyc_status || "").toUpperCase() !== "VERIFIED") {
+    return {
+      ok: false,
+      status: 403,
+      error: "KYC verification is required before banking out or withdrawing funds."
+    };
+  }
+  return { ok: true, tier: kyc.tier, status: kyc.kyc_status };
+}
+
 app.get("/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() AS now");
@@ -1294,7 +1364,7 @@ app.post("/api/ngn/deposit/verify", requireAuth, async (req, res) => {
 });
 
 app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
-  const { bankName, accountNumber, accountName, amountKobo, passcode } = req.body || {};
+  const { bankName, accountNumber, accountName, amountKobo, passcode, totpCode, token } = req.body || {};
   const cleanBank = String(bankName || "").trim();
   const cleanAcct = String(accountNumber || "").trim();
   const amount = Number(amountKobo);
@@ -1318,6 +1388,20 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
     if (!pinCheck.ok) {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+    }
+
+    const kycCheck = await verifyKycApprovedTx(client, userId);
+    if (!kycCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(kycCheck.status).json({ ok: false, error: kycCheck.error });
+    }
+
+    const totpCheck = await verifyUserTotpTx(client, userId, totpCode || token, {
+      requiredWhenEnabled: true
+    });
+    if (!totpCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
     }
 
     const userRowRes = await client.query(`SELECT full_name FROM users WHERE id = $1`, [userId]);
@@ -2028,7 +2112,7 @@ app.post("/api/webhooks/nowpayments", async (req, res) => {
 });
 
 app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
-  const { asset = "USDT", destinationAddress, amountMinor, gasFeeMinor = 0, passcode } = req.body || {};
+  const { asset = "USDT", destinationAddress, amountMinor, gasFeeMinor = 0, passcode, totpCode, token } = req.body || {};
   const cleanAsset = String(asset || "").trim().toUpperCase();
   const cleanAddr = String(destinationAddress || "").trim();
   const amount = Number(amountMinor);
@@ -2056,6 +2140,14 @@ app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
     if (!pinCheck.ok) {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+    }
+
+    const totpCheck = await verifyUserTotpTx(client, userId, totpCode || token, {
+      requiredWhenEnabled: true
+    });
+    if (!totpCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
     }
 
     const kycRes = await client.query(
@@ -2727,14 +2819,24 @@ app.post("/api/security/totp/disable", requireAuth, async (req, res) => {
 
 app.post("/api/security/passcode/set", requireAuth, async (req, res) => {
   const userId = Number(req.auth.sub);
-  const { passcode } = req.body || {};
+  const { passcode, totpCode, token } = req.body || {};
   if (!/^\d{4}$/.test(String(passcode || ""))) {
     return res.status(400).json({ ok: false, error: "A 4-digit numeric passcode is required." });
   }
 
+  const client = await pool.connect();
   try {
+    await client.query("BEGIN");
+    const totpCheck = await verifyUserTotpTx(client, userId, totpCode || token, {
+      requiredWhenEnabled: true
+    });
+    if (!totpCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+    }
+
     const hashed = hashPasscode(String(passcode));
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       `UPDATE users
        SET transaction_passcode_hash = $1,
            passcode_failed_attempts = 0,
@@ -2744,12 +2846,154 @@ app.post("/api/security/passcode/set", requireAuth, async (req, res) => {
        RETURNING id, account_status`,
       [hashed, userId]
     );
+    await client.query("COMMIT");
     if (!rows.length) {
       return res.status(404).json({ ok: false, error: "User not found." });
     }
     return res.json({ ok: true, userId: rows[0].id, passcodeSet: true });
   } catch (err) {
+    await client.query("ROLLBACK");
     return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/security/password/change", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  const { currentPassword, newPassword, totpCode, token } = req.body || {};
+  if (String(newPassword || "").length < 6) {
+    return res.status(400).json({ ok: false, error: "New password must be at least 6 characters." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const totpCheck = await verifyUserTotpTx(client, userId, totpCode || token, {
+      requiredWhenEnabled: true
+    });
+    if (!totpCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+    }
+
+    const { rows } = await client.query(
+      `SELECT id, password_hash FROM users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "User not found." });
+    }
+    if (rows[0].password_hash && currentPassword) {
+      const okPass = await bcrypt.compare(String(currentPassword), rows[0].password_hash);
+      if (!okPass) {
+        await client.query("ROLLBACK");
+        return res.status(401).json({ ok: false, error: "Current password is incorrect." });
+      }
+    }
+
+    const nextHash = await bcrypt.hash(String(newPassword), 12);
+    await client.query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [nextHash, userId]
+    );
+    await client.query("COMMIT");
+    return res.json({ ok: true, message: "Login password updated." });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/security/email/change", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  const cleanEmail = String(req.body?.newEmail || req.body?.email || "").trim().toLowerCase();
+  const rawTotp = req.body?.totpCode || req.body?.token;
+
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ ok: false, error: "A valid email address is required." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const totpCheck = await verifyUserTotpTx(client, userId, rawTotp, {
+      requiredWhenEnabled: true
+    });
+    if (!totpCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+    }
+
+    const taken = await client.query(
+      `SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2`,
+      [cleanEmail, userId]
+    );
+    if (taken.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "This email is already in use." });
+    }
+
+    await client.query(
+      `UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2`,
+      [cleanEmail, userId]
+    );
+    await client.query("COMMIT");
+    return res.json({ ok: true, email: cleanEmail });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/security/phone/change", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  const cleanPhone = String(req.body?.newPhone || req.body?.phone || "").trim();
+  const canonicalPhone = normalizePhone(cleanPhone);
+  const rawTotp = req.body?.totpCode || req.body?.token;
+
+  if (!canonicalPhone || canonicalPhone.length < 7 || canonicalPhone.length > 15) {
+    return res.status(400).json({ ok: false, error: "Please enter a valid phone number." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const totpCheck = await verifyUserTotpTx(client, userId, rawTotp, {
+      requiredWhenEnabled: true
+    });
+    if (!totpCheck.ok) {
+      await client.query("ROLLBACK");
+      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+    }
+
+    const taken = await client.query(
+      `SELECT id FROM users
+       WHERE (normalized_phone = $1 OR regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1)
+         AND id <> $2`,
+      [canonicalPhone, userId]
+    );
+    if (taken.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "This phone number is already linked to another account." });
+    }
+
+    await client.query(
+      `UPDATE users SET phone = $1, normalized_phone = $2, updated_at = NOW() WHERE id = $3`,
+      [cleanPhone, canonicalPhone, userId]
+    );
+    await client.query("COMMIT");
+    return res.json({ ok: true, phone: cleanPhone, normalizedPhone: canonicalPhone });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
   }
 });
 
