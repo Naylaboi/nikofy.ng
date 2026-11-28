@@ -4,13 +4,37 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const sgMail = require("@sendgrid/mail");
 const { Pool } = require("pg");
+const { authenticator } = require("otplib");
+
+authenticator.options = { window: 1 };
 
 const app = express();
-app.use(express.json({ limit: "10mb" }));
+
+// Capture raw body for strict HMAC signature verification on webhooks
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    }
+  })
+);
+
+const ALLOWED_ORIGINS = new Set(
+  String(process.env.ALLOWED_ORIGINS || "https://nikofy.ng,https://www.nikofy.ng")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
+
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = String(req.headers.origin || "").trim();
+  if (!origin || ALLOWED_ORIGINS.has(origin) || process.env.ALLOW_ALL_ORIGINS === "true") {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  }
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,x-nowpayments-sig");
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }
@@ -23,6 +47,10 @@ const pool = new Pool({
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || "nikofy-dev-secret-change-me";
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
+  console.error("FATAL: JWT_SECRET must be set in production.");
+  process.exit(1);
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
@@ -38,7 +66,9 @@ const PUBLIC_API_BASE_URL = process.env.PUBLIC_API_BASE_URL || "https://nikofy-n
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 const VTPASS_API_KEY = (process.env.VTPASS_API_KEY || "").trim();
 const VTPASS_SECRET_KEY = (process.env.VTPASS_SECRET_KEY || "").trim();
-const VTPASS_BASE_URL = (process.env.VTPASS_BASE_URL || "https://api-service.vtpass.com/api").trim().replace(/\/+$/, "");
+const VTPASS_BASE_URL = (process.env.VTPASS_BASE_URL || "https://api-service.vtpass.com/api")
+  .trim()
+  .replace(/\/+$/, "");
 
 const VTPASS_SERVICE_MAP = {
   AIRTIME: {
@@ -219,10 +249,7 @@ async function resolveVtpassVariation({ serviceID, planLabel, variationCode, amo
     }
   }
 
-  return {
-    variationCode: String(variations[0].variation_code),
-    variationAmountNaira: Number(variations[0].variation_amount || amountNaira)
-  };
+  return null;
 }
 
 if (SENDGRID_API_KEY) {
@@ -335,15 +362,18 @@ function sortObjectKeys(obj) {
   return obj;
 }
 
-function verifyNowPaymentsSignature(rawBodyObj, signatureHeader) {
+function verifyNowPaymentsSignature(req, signatureHeader) {
   if (!NOWPAYMENTS_IPN_SECRET) {
     return true;
   }
   if (!signatureHeader) return false;
-  const sortedJson = JSON.stringify(sortObjectKeys(rawBodyObj || {}));
+  const payloadSource =
+    req.rawBody && req.rawBody.length
+      ? req.rawBody.toString("utf8")
+      : JSON.stringify(sortObjectKeys(req.body || {}));
   const expected = crypto
     .createHmac("sha512", NOWPAYMENTS_IPN_SECRET)
-    .update(sortedJson)
+    .update(payloadSource)
     .digest("hex");
   const sigBuf = Buffer.from(String(signatureHeader).trim(), "utf8");
   const expBuf = Buffer.from(expected, "utf8");
@@ -380,6 +410,8 @@ async function ensureSchemaTables() {
       transaction_passcode_hash TEXT,
       passcode_failed_attempts INTEGER NOT NULL DEFAULT 0,
       passcode_locked_until TIMESTAMPTZ,
+      totp_secret TEXT,
+      totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
       account_status TEXT NOT NULL DEFAULT 'ACTIVE',
       freeze_reason TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -388,6 +420,8 @@ async function ensureSchemaTables() {
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS normalized_phone TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
       ON users (LOWER(email));
@@ -629,6 +663,7 @@ async function loadUserWalletSnapshot(client, dbUserId) {
   const userRes = await client.query(
     `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.account_status, u.freeze_reason,
             (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+            u.totp_enabled,
             k.tier AS kyc_tier, k.kyc_status,
             k.daily_ngn_limit_kobo, k.max_ngn_balance_kobo,
             k.daily_usd_limit_cents, k.max_usd_balance_cents
@@ -673,7 +708,7 @@ async function loadUserWalletSnapshot(client, dbUserId) {
   };
 }
 
-async function verifyUserPasscodeTx(client, dbUserId, passcode) {
+async function verifyUserPasscodeTx(client, dbUserId, passcode, { requiredIfUnset = false } = {}) {
   const { rows } = await client.query(
     `SELECT id, transaction_passcode_hash, passcode_failed_attempts, passcode_locked_until, account_status
      FROM users WHERE id = $1 FOR UPDATE`,
@@ -687,6 +722,9 @@ async function verifyUserPasscodeTx(client, dbUserId, passcode) {
     return { ok: false, status: 403, error: `Account is ${user.account_status}.` };
   }
   if (!user.transaction_passcode_hash) {
+    if (requiredIfUnset) {
+      return { ok: false, status: 400, error: "Please set a 4-digit transaction passcode first." };
+    }
     return { ok: true, skipped: true };
   }
   if (!/^\d{4}$/.test(String(passcode || ""))) {
@@ -796,7 +834,6 @@ app.get("/api/me", requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
     const snapshot = await loadUserWalletSnapshot(client, Number(req.auth.sub));
     await client.query("COMMIT");
 
@@ -816,6 +853,7 @@ app.get("/api/me", requireAuth, async (req, res) => {
         accountStatus: u.account_status,
         freezeReason: u.freeze_reason || null,
         passcodeSet: Boolean(u.passcode_set),
+        totpEnabled: Boolean(u.totp_enabled),
         kycTier: u.kyc_tier || "TIER_1",
         kycStatus: u.kyc_status || "UNVERIFIED",
         limits: {
@@ -840,7 +878,6 @@ app.get("/api/wallets", requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
     const snapshot = await loadUserWalletSnapshot(client, Number(req.auth.sub));
     await client.query("COMMIT");
 
@@ -871,7 +908,6 @@ app.get("/api/users/lookup", requireAuth, async (req, res) => {
   }
 
   try {
-    await ensureSchemaTables();
     const { rows } = await pool.query(
       `SELECT id, full_name, username, account_status
        FROM users
@@ -919,7 +955,6 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
     await provisionUserDefaults(client, senderId);
 
     const pinCheck = await verifyUserPasscodeTx(client, senderId, passcode);
@@ -1104,7 +1139,6 @@ app.post("/api/ngn/deposit/verify", requireAuth, async (req, res) => {
 
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
     await provisionUserDefaults(client, userId);
 
     const existing = await client.query(
@@ -1214,7 +1248,7 @@ app.post("/api/ngn/deposit/verify", requireAuth, async (req, res) => {
 });
 
 app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
-  const { bankName, accountNumber, amountKobo, passcode } = req.body || {};
+  const { bankName, accountNumber, accountName, amountKobo, passcode } = req.body || {};
   const cleanBank = String(bankName || "").trim();
   const cleanAcct = String(accountNumber || "").trim();
   const amount = Number(amountKobo);
@@ -1232,7 +1266,6 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
     await provisionUserDefaults(client, userId);
 
     const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
@@ -1240,6 +1273,10 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
     }
+
+    const userRowRes = await client.query(`SELECT full_name FROM users WHERE id = $1`, [userId]);
+    const resolvedRecipientName =
+      String(accountName || "").trim() || userRowRes.rows[0]?.full_name || `Nikofy User ${userId}`;
 
     const kycRes = await client.query(
       `SELECT daily_ngn_limit_kobo FROM kyc_profiles WHERE user_id = $1`,
@@ -1274,6 +1311,7 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
 
     let providerRef = `NGN_WDR_${Date.now()}`;
     let mode = "LEDGER_READY";
+    let withdrawalStatus = "COMPLETED";
 
     if (PAYSTACK_SECRET_KEY) {
       const bankCode = lookupBankCode(cleanBank);
@@ -1285,7 +1323,7 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
         },
         body: JSON.stringify({
           type: "nuban",
-          name: `Nikofy User ${userId}`,
+          name: resolvedRecipientName,
           account_number: cleanAcct,
           bank_code: bankCode,
           currency: "NGN"
@@ -1317,6 +1355,13 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
       }
       mode = "LIVE_PAYSTACK";
       providerRef = String(transferData.data?.transfer_code || transferData.data?.reference || providerRef);
+      const psStatus = String(transferData.data?.status || "").toLowerCase();
+      withdrawalStatus =
+        psStatus === "success"
+          ? "COMPLETED"
+          : psStatus === "otp"
+            ? "OTP_REQUIRED"
+            : "PROCESSING";
     }
 
     const nextBalance = Number(wallet.balance_minor) - fees.totalDebitMinor;
@@ -1337,8 +1382,18 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
       `INSERT INTO ngn_withdrawals (
         reference, user_id, bank_name, account_number, amount_kobo, fee_kobo, total_debit_kobo, provider_ref, status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED')`,
-      [reference, userId, cleanBank, cleanAcct, amount, fees.platformFeeMinor, fees.totalDebitMinor, providerRef]
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        reference,
+        userId,
+        cleanBank,
+        cleanAcct,
+        amount,
+        fees.platformFeeMinor,
+        fees.totalDebitMinor,
+        providerRef,
+        withdrawalStatus
+      ]
     );
 
     const snapshot = await loadUserWalletSnapshot(client, userId);
@@ -1347,6 +1402,7 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
     return res.json({
       ok: true,
       mode,
+      status: withdrawalStatus,
       reference,
       providerRef,
       amountMinor: amount,
@@ -1431,8 +1487,11 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
   const cleanCust = String(customerId || phoneNumber || meterNumber || "").trim();
   const cleanPlanLabel = planLabel ? String(planLabel).trim().slice(0, 120) : null;
 
-  let amount = Number(amountKobo);
-  if (!Number.isInteger(amount) || amount <= 0) {
+  let amount = 0;
+  if (amountKobo !== undefined && amountKobo !== null && amountKobo !== "") {
+    const koboNum = Number(amountKobo);
+    amount = Number.isFinite(koboNum) ? Math.round(koboNum) : 0;
+  } else {
     const nairaVal = Number(amountNaira !== undefined ? amountNaira : rawAmount);
     amount = Number.isFinite(nairaVal) && nairaVal > 0 ? Math.round(nairaVal * 100) : 0;
   }
@@ -1455,7 +1514,6 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
 
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
     await provisionUserDefaults(client, userId);
 
     const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
@@ -1524,7 +1582,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({
           ok: false,
-          error: "Could not match plan/bouquet to a VTpass variation_code."
+          error: "Could not match plan/bouquet to a VTpass variation_code. Pass variationCode or select a listed plan."
         });
       }
       payload.variation_code = resolvedPlan.variationCode;
@@ -1557,11 +1615,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
       vtData.transactionId ||
       reference
     );
-    const tokenCode = vtData.purchased_code
-      ? String(vtData.purchased_code)
-      : (normalizedCategory === "ELECTRICITY"
-        ? `${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}`
-        : null);
+    const tokenCode = vtData.purchased_code ? String(vtData.purchased_code) : null;
 
     const nextBalance = Number(wallet.balance_minor) - amount;
     await client.query(
@@ -1607,7 +1661,6 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
 app.get("/api/ledger", requireAuth, async (req, res) => {
   const userId = Number(req.auth.sub);
   try {
-    await ensureSchemaTables();
     const { rows } = await pool.query(
       `
       SELECT * FROM (
@@ -1710,8 +1763,6 @@ app.post("/api/crypto/deposit-address", requireAuth, async (req, res) => {
   const priceAmount = Math.max(1, Number(amountUsd) || 20);
 
   try {
-    await ensureSchemaTables();
-
     let depositAddress = "";
     let providerPaymentId = "";
     let mode = "LIVE_PROVIDER";
@@ -1776,7 +1827,7 @@ app.post("/api/crypto/deposit-address", requireAuth, async (req, res) => {
 
 app.post("/api/webhooks/nowpayments", async (req, res) => {
   const sig = req.headers["x-nowpayments-sig"];
-  if (!verifyNowPaymentsSignature(req.body, sig)) {
+  if (!verifyNowPaymentsSignature(req, sig)) {
     return res.status(401).json({ ok: false, error: "Invalid webhook signature." });
   }
 
@@ -1796,7 +1847,6 @@ app.post("/api/webhooks/nowpayments", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
 
     const depRes = await client.query(
       `SELECT id, user_id, asset, network, amount_minor, status, credited
@@ -1954,7 +2004,6 @@ app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
     await provisionUserDefaults(client, userId);
 
     const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
@@ -2105,8 +2154,6 @@ app.post("/api/auth/otp/send", async (req, res) => {
   }
 
   try {
-    await ensureOtpTable();
-
     const code = generateSixDigitOtp();
     const codeHash = hashOtpCode(code);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
@@ -2174,8 +2221,6 @@ app.post("/api/auth/otp/verify", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureOtpTable();
-    await ensureSchemaTables();
 
     const { rows } = await client.query(
       `SELECT id, code_hash, attempts, expires_at, consumed_at
@@ -2229,6 +2274,7 @@ app.post("/api/auth/otp/verify", async (req, res) => {
     let userRes = await client.query(
       `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.account_status, u.freeze_reason,
               (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+              u.totp_enabled,
               k.tier AS kyc_tier, k.kyc_status
        FROM users u
        LEFT JOIN kyc_profiles k ON k.user_id = u.id
@@ -2273,7 +2319,7 @@ app.post("/api/auth/otp/verify", async (req, res) => {
           full_name, username, email, phone, normalized_phone, password_hash, account_status, created_at, updated_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', NOW(), NOW())
-        RETURNING id, full_name, username, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set`,
+        RETURNING id, full_name, username, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set, totp_enabled`,
         [
           String(fullName || "").trim() || "Nikofy User",
           cleanUsername,
@@ -2289,6 +2335,7 @@ app.post("/api/auth/otp/verify", async (req, res) => {
       userRes = await client.query(
         `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.account_status, u.freeze_reason,
                 (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+                u.totp_enabled,
                 k.tier AS kyc_tier, k.kyc_status
          FROM users u
          LEFT JOIN kyc_profiles k ON k.user_id = u.id
@@ -2315,6 +2362,7 @@ app.post("/api/auth/otp/verify", async (req, res) => {
         accountStatus: user.account_status,
         freezeReason: user.freeze_reason || null,
         passcodeSet: Boolean(user.passcode_set),
+        totpEnabled: Boolean(user.totp_enabled),
         kycTier: user.kyc_tier || "TIER_1",
         kycStatus: user.kyc_status || "UNVERIFIED"
       }
@@ -2363,7 +2411,6 @@ app.post("/api/auth/register", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await ensureSchemaTables();
 
     const existingEmail = await client.query(
       `SELECT id FROM users WHERE LOWER(email) = $1`,
@@ -2412,7 +2459,7 @@ app.post("/api/auth/register", async (req, res) => {
         full_name, username, email, phone, normalized_phone, password_hash, transaction_passcode_hash, account_status, created_at, updated_at
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, 'ACTIVE', NOW(), NOW())
-      RETURNING id, full_name, username, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set, created_at`,
+      RETURNING id, full_name, username, email, phone, account_status, (transaction_passcode_hash IS NOT NULL) AS passcode_set, totp_enabled, created_at`,
       [
         cleanName || "Nikofy User",
         cleanUsername,
@@ -2441,6 +2488,7 @@ app.post("/api/auth/register", async (req, res) => {
         phone: user.phone,
         accountStatus: user.account_status,
         passcodeSet: Boolean(user.passcode_set),
+        totpEnabled: Boolean(user.totp_enabled),
         kycTier: "TIER_1",
         kycStatus: "UNVERIFIED"
       }
@@ -2469,11 +2517,10 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
-    await ensureSchemaTables();
-
     const { rows } = await pool.query(
       `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.password_hash, u.account_status, u.freeze_reason,
               (u.transaction_passcode_hash IS NOT NULL) AS passcode_set,
+              u.totp_enabled,
               k.tier AS kyc_tier, k.kyc_status
        FROM users u
        LEFT JOIN kyc_profiles k ON k.user_id = u.id
@@ -2513,6 +2560,7 @@ app.post("/api/auth/login", async (req, res) => {
         accountStatus: user.account_status,
         freezeReason: user.freeze_reason || null,
         passcodeSet: Boolean(user.passcode_set),
+        totpEnabled: Boolean(user.totp_enabled),
         kycTier: user.kyc_tier || "TIER_1",
         kycStatus: user.kyc_status || "UNVERIFIED"
       }
@@ -2523,10 +2571,102 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-app.post("/api/security/passcode/set", async (req, res) => {
-  const { userId, passcode } = req.body;
-  if (!userId || !/^\d{4}$/.test(String(passcode || ""))) {
-    return res.status(400).json({ error: "userId and a 4-digit numeric passcode are required." });
+// GOOGLE AUTHENTICATOR (TOTP) ROUTES
+app.post("/api/security/totp/setup", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.auth.sub);
+    const { rows } = await pool.query(`SELECT email FROM users WHERE id = $1`, [userId]);
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "User not found." });
+    }
+
+    const secret = authenticator.generateSecret();
+    const email = rows[0].email;
+    const otpauthUrl = authenticator.keyuri(email, "Nikofy", secret);
+
+    await pool.query(
+      `UPDATE users
+       SET totp_secret = $1, totp_enabled = FALSE, updated_at = NOW()
+       WHERE id = $2`,
+      [secret, userId]
+    );
+
+    return res.json({
+      ok: true,
+      secret,
+      otpauthUrl
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/security/totp/verify", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.auth.sub);
+    const token = String(req.body?.token || req.body?.code || "").trim();
+
+    if (!/^\d{6}$/.test(token)) {
+      return res.status(400).json({ ok: false, error: "Enter a 6-digit authenticator code." });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT totp_secret, totp_enabled FROM users WHERE id = $1`,
+      [userId]
+    );
+    const secret = rows[0]?.totp_secret;
+    if (!secret) {
+      return res.status(400).json({ ok: false, error: "Authenticator has not been set up yet." });
+    }
+
+    const verified = authenticator.verify({ token, secret });
+    if (!verified) {
+      return res.status(401).json({ ok: false, error: "Invalid or expired authenticator code." });
+    }
+
+    if (!rows[0]?.totp_enabled) {
+      await pool.query(
+        `UPDATE users SET totp_enabled = TRUE, updated_at = NOW() WHERE id = $1`,
+        [userId]
+      );
+    }
+
+    return res.json({ ok: true, verified: true, totpEnabled: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/security/totp/disable", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.auth.sub);
+    const token = String(req.body?.token || req.body?.code || "").trim();
+    if (!/^\d{6}$/.test(token)) {
+      return res.status(400).json({ ok: false, error: "Enter a 6-digit authenticator code to disable 2FA." });
+    }
+
+    const { rows } = await pool.query(`SELECT totp_secret FROM users WHERE id = $1`, [userId]);
+    const secret = rows[0]?.totp_secret;
+    if (!secret || !authenticator.verify({ token, secret })) {
+      return res.status(401).json({ ok: false, error: "Invalid authenticator code." });
+    }
+
+    await pool.query(
+      `UPDATE users SET totp_secret = NULL, totp_enabled = FALSE, updated_at = NOW() WHERE id = $1`,
+      [userId]
+    );
+
+    return res.json({ ok: true, totpEnabled: false });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/security/passcode/set", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  const { passcode } = req.body || {};
+  if (!/^\d{4}$/.test(String(passcode || ""))) {
+    return res.status(400).json({ ok: false, error: "A 4-digit numeric passcode is required." });
   }
 
   try {
@@ -2537,42 +2677,48 @@ app.post("/api/security/passcode/set", async (req, res) => {
            passcode_failed_attempts = 0,
            passcode_locked_until = NULL,
            updated_at = NOW()
-       WHERE id::text = $2
+       WHERE id = $2
        RETURNING id, account_status`,
-      [hashed, String(userId)]
+      [hashed, userId]
     );
     if (!rows.length) {
-      return res.status(404).json({ error: "User not found." });
+      return res.status(404).json({ ok: false, error: "User not found." });
     }
     return res.json({ ok: true, userId: rows[0].id, passcodeSet: true });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-app.post("/api/security/passcode/verify", async (req, res) => {
-  const { userId, passcode } = req.body;
-  if (!userId || !/^\d{4}$/.test(String(passcode || ""))) {
-    return res.status(400).json({ error: "userId and a 4-digit numeric passcode are required." });
+app.post("/api/security/passcode/verify", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  const { passcode } = req.body || {};
+  if (!/^\d{4}$/.test(String(passcode || ""))) {
+    return res.status(400).json({ ok: false, error: "A 4-digit numeric passcode is required." });
   }
 
   try {
     const { rows } = await pool.query(
       `SELECT id, transaction_passcode_hash, passcode_failed_attempts, passcode_locked_until, account_status
-       FROM users WHERE id::text = $1`,
-      [String(userId)]
+       FROM users WHERE id = $1`,
+      [userId]
     );
     if (!rows.length) {
-      return res.status(404).json({ error: "User not found." });
+      return res.status(404).json({ ok: false, error: "User not found." });
     }
 
     const user = rows[0];
     if (user.account_status !== "ACTIVE") {
-      return res.status(403).json({ error: `Account is ${user.account_status}.` });
+      return res.status(403).json({ ok: false, error: `Account is ${user.account_status}.` });
+    }
+
+    if (!user.transaction_passcode_hash) {
+      return res.status(400).json({ ok: false, error: "Transaction passcode is not set." });
     }
 
     if (user.passcode_locked_until && new Date(user.passcode_locked_until) > new Date()) {
       return res.status(429).json({
+        ok: false,
         error: "Passcode temporarily locked due to failed attempts.",
         lockedUntil: user.passcode_locked_until
       });
@@ -2614,16 +2760,17 @@ app.post("/api/security/passcode/verify", async (req, res) => {
 
     return res.json({ ok: true, verified: true });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-app.post("/api/transactions/evaluate", async (req, res) => {
-  const { userId, channel, amountMinor, gasFeeMinor = 0, projectedBalanceAfterMinor = null } = req.body;
+app.post("/api/transactions/evaluate", requireAuth, async (req, res) => {
+  const dbUserId = Number(req.auth.sub);
+  const { channel, amountMinor, gasFeeMinor = 0, projectedBalanceAfterMinor = null } = req.body || {};
   const amount = Number(amountMinor);
 
-  if (!userId || !Number.isInteger(amount) || amount <= 0) {
-    return res.status(400).json({ error: "userId and positive integer amountMinor are required." });
+  if (!Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ ok: false, error: "Positive integer amountMinor are required." });
   }
 
   const client = await pool.connect();
@@ -2631,19 +2778,18 @@ app.post("/api/transactions/evaluate", async (req, res) => {
     await client.query("BEGIN");
 
     const userRes = await client.query(
-      `SELECT id, account_status FROM users WHERE id::text = $1 FOR UPDATE`,
-      [String(userId)]
+      `SELECT id, account_status FROM users WHERE id = $1 FOR UPDATE`,
+      [dbUserId]
     );
     if (!userRes.rows.length) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "User not found." });
+      return res.status(404).json({ ok: false, error: "User not found." });
     }
-
-    const dbUserId = userRes.rows[0].id;
 
     if (userRes.rows[0].account_status !== "ACTIVE") {
       await client.query("ROLLBACK");
       return res.status(403).json({
+        ok: false,
         allowed: false,
         accountStatus: userRes.rows[0].account_status,
         reason: "Account is not active."
@@ -2679,6 +2825,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
       );
       await client.query("COMMIT");
       return res.status(403).json({
+        ok: false,
         allowed: false,
         accountStatus: "FROZEN",
         reason: "Account auto-frozen because Tier 1 balance limit was exceeded."
@@ -2698,6 +2845,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
       if (nextSpent > Number(kyc.daily_ngn_limit_kobo)) {
         await client.query("ROLLBACK");
         return res.status(422).json({
+          ok: false,
           allowed: false,
           reason: "Daily NGN limit exceeded for current KYC tier.",
           dailyLimitMinor: Number(kyc.daily_ngn_limit_kobo),
@@ -2709,6 +2857,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
       if (nextSpentUsd > Number(kyc.daily_usd_limit_cents)) {
         await client.query("ROLLBACK");
         return res.status(422).json({
+          ok: false,
           allowed: false,
           reason: "Daily USD-equivalent limit exceeded for current KYC tier.",
           dailyLimitMinor: Number(kyc.daily_usd_limit_cents),
@@ -2721,6 +2870,7 @@ app.post("/api/transactions/evaluate", async (req, res) => {
     await client.query("COMMIT");
 
     return res.json({
+      ok: true,
       allowed: true,
       tier: kyc.tier,
       channel,
@@ -2729,21 +2879,21 @@ app.post("/api/transactions/evaluate", async (req, res) => {
     });
   } catch (err) {
     await client.query("ROLLBACK");
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ ok: false, error: err.message });
   } finally {
     client.release();
   }
 });
 
-app.post("/api/kyc/verify", async (req, res) => {
+app.post("/api/kyc/verify", requireAuth, async (req, res) => {
   try {
+    const userId = Number(req.auth.sub);
     const {
-      userId,
       tier = "TIER_1",
       idNumber,
       dateOfBirth,
       selfieImage,
-      currentBalanceNgn = 0,
+      currentBalanceNgn = 0
     } = req.body || {};
 
     const cleanId = String(idNumber || "").trim();
@@ -2751,7 +2901,7 @@ app.post("/api/kyc/verify", async (req, res) => {
       return res.status(400).json({
         ok: false,
         status: "FAILED",
-        error: "Please enter a valid 11-digit BVN or NIN.",
+        error: "Please enter a valid 11-digit BVN or NIN."
       });
     }
 
@@ -2769,7 +2919,7 @@ app.post("/api/kyc/verify", async (req, res) => {
       const headers = {
         AppId: appId,
         Authorization: secretKey,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       };
 
       if (normalizedTier === "TIER_1") {
@@ -2782,7 +2932,7 @@ app.post("/api/kyc/verify", async (req, res) => {
           return res.status(400).json({
             ok: false,
             status: "FAILED",
-            error: data.error || data.message || "BVN verification failed.",
+            error: data.error || data.message || "BVN verification failed."
           });
         }
         verifiedDob = data.entity.date_of_birth || data.entity.birthdate || dateOfBirth;
@@ -2792,7 +2942,7 @@ app.post("/api/kyc/verify", async (req, res) => {
           return res.status(400).json({
             ok: false,
             status: "FAILED",
-            error: "A live selfie capture is required for Tier 2 verification.",
+            error: "A live selfie capture is required for Tier 2 verification."
           });
         }
         const cleanBase64 = String(selfieImage).replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
@@ -2802,15 +2952,15 @@ app.post("/api/kyc/verify", async (req, res) => {
           body: JSON.stringify({
             nin: cleanId,
             selfie_image: cleanBase64,
-            threshold: 90,
-          }),
+            threshold: 90
+          })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.entity) {
           return res.status(400).json({
             ok: false,
             status: "FAILED",
-            error: data.error || data.message || "NIN + Selfie verification failed.",
+            error: data.error || data.message || "NIN + Selfie verification failed."
           });
         }
         verifiedDob = data.entity.date_of_birth || data.entity.birthdate || dateOfBirth;
@@ -2823,7 +2973,7 @@ app.post("/api/kyc/verify", async (req, res) => {
         return res.status(400).json({
           ok: false,
           status: "FAILED",
-          error: "Selfie image is required for Tier 2 liveness & face match.",
+          error: "Selfie image is required for Tier 2 liveness & face match."
         });
       }
       faceMatched = true;
@@ -2835,7 +2985,7 @@ app.post("/api/kyc/verify", async (req, res) => {
       return res.status(400).json({
         ok: false,
         status: "FAILED",
-        error: "Valid date of birth is required for age verification.",
+        error: "Valid date of birth is required for age verification."
       });
     }
 
@@ -2849,7 +2999,7 @@ app.post("/api/kyc/verify", async (req, res) => {
         ok: false,
         status: "FAILED",
         ageVerified: false,
-        error: "You must be at least 18 years old to verify your account.",
+        error: "You must be at least 18 years old to verify your account."
       });
     }
 
@@ -2860,64 +3010,60 @@ app.post("/api/kyc/verify", async (req, res) => {
         ageVerified: true,
         faceMatched: false,
         confidenceValue,
-        error: "Selfie face match did not meet the required threshold.",
+        error: "Selfie face match did not meet the required threshold."
       });
     }
 
     const frozen = normalizedTier === "TIER_1" && Number(currentBalanceNgn) > 1000000;
 
     if (userId && process.env.DATABASE_URL) {
-      try {
-        await ensureSchemaTables();
-        const isTier2 = normalizedTier === "TIER_2";
-        const nextDailyNgnLimitKobo = isTier2 ? 200000000 : 20000000;
-        const nextMaxNgnBalanceKobo = isTier2 ? null : 100000000;
-        const nextDailyUsdLimitCents = isTier2 ? 100000 : 10000;
-        const nextMaxUsdBalanceCents = isTier2 ? null : 500000;
+      const isTier2 = normalizedTier === "TIER_2";
+      const nextDailyNgnLimitKobo = isTier2 ? 200000000 : 20000000;
+      const nextMaxNgnBalanceKobo = isTier2 ? null : 100000000;
+      const nextDailyUsdLimitCents = isTier2 ? 100000 : 10000;
+      const nextMaxUsdBalanceCents = isTier2 ? null : 500000;
 
-        await pool.query(
-          `INSERT INTO kyc_profiles (
-            user_id, tier, kyc_status, bvn_verified, nin_verified, liveness_status,
-            daily_ngn_limit_kobo, max_ngn_balance_kobo, daily_usd_limit_cents, max_usd_balance_cents, updated_at
-          )
-          VALUES ($1, $2, 'VERIFIED', $3, $4, 'VERIFIED', $5, $6, $7, $8, NOW())
-          ON CONFLICT (user_id) DO UPDATE SET
-            tier = EXCLUDED.tier,
-            kyc_status = 'VERIFIED',
-            bvn_verified = COALESCE(EXCLUDED.bvn_verified, kyc_profiles.bvn_verified),
-            nin_verified = COALESCE(EXCLUDED.nin_verified, kyc_profiles.nin_verified),
-            liveness_status = 'VERIFIED',
-            daily_ngn_limit_kobo = EXCLUDED.daily_ngn_limit_kobo,
-            max_ngn_balance_kobo = EXCLUDED.max_ngn_balance_kobo,
-            daily_usd_limit_cents = EXCLUDED.daily_usd_limit_cents,
-            max_usd_balance_cents = EXCLUDED.max_usd_balance_cents,
-            updated_at = NOW()`,
-          [
-            String(userId),
-            normalizedTier,
-            !isTier2,
-            isTier2,
-            nextDailyNgnLimitKobo,
-            nextMaxNgnBalanceKobo,
-            nextDailyUsdLimitCents,
-            nextMaxUsdBalanceCents,
-          ]
-        );
+      await pool.query(
+        `INSERT INTO kyc_profiles (
+          user_id, tier, kyc_status, bvn_verified, nin_verified, liveness_status,
+          daily_ngn_limit_kobo, max_ngn_balance_kobo, daily_usd_limit_cents, max_usd_balance_cents, updated_at
+        )
+        VALUES ($1, $2, 'VERIFIED', $3, $4, 'VERIFIED', $5, $6, $7, $8, NOW())
+        ON CONFLICT (user_id) DO UPDATE SET
+          tier = EXCLUDED.tier,
+          kyc_status = 'VERIFIED',
+          bvn_verified = COALESCE(EXCLUDED.bvn_verified, kyc_profiles.bvn_verified),
+          nin_verified = COALESCE(EXCLUDED.nin_verified, kyc_profiles.nin_verified),
+          liveness_status = 'VERIFIED',
+          daily_ngn_limit_kobo = EXCLUDED.daily_ngn_limit_kobo,
+          max_ngn_balance_kobo = EXCLUDED.max_ngn_balance_kobo,
+          daily_usd_limit_cents = EXCLUDED.daily_usd_limit_cents,
+          max_usd_balance_cents = EXCLUDED.max_usd_balance_cents,
+          updated_at = NOW()`,
+        [
+          userId,
+          normalizedTier,
+          !isTier2,
+          isTier2,
+          nextDailyNgnLimitKobo,
+          nextMaxNgnBalanceKobo,
+          nextDailyUsdLimitCents,
+          nextMaxUsdBalanceCents
+        ]
+      );
 
-        await pool.query(
-          `UPDATE users
-           SET account_status = $2,
-               freeze_reason = $3
-           WHERE id::text = $1`,
-          [
-            String(userId),
-            frozen ? "FROZEN" : "ACTIVE",
-            frozen ? "Tier 1 balance limit (₦1,000,000) exceeded. Upgrade to Tier 2." : null,
-          ]
-        );
-      } catch (dbErr) {
-        console.warn("KYC DB persistence skipped/failed:", dbErr.message);
-      }
+      await pool.query(
+        `UPDATE users
+         SET account_status = $2,
+             freeze_reason = $3,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [
+          userId,
+          frozen ? "FROZEN" : "ACTIVE",
+          frozen ? "Tier 1 balance limit (₦1,000,000) exceeded. Upgrade to Tier 2." : null
+        ]
+      );
     }
 
     return res.json({
@@ -2930,14 +3076,14 @@ app.post("/api/kyc/verify", async (req, res) => {
       age,
       faceMatched,
       confidenceValue,
-      frozen,
+      frozen
     });
   } catch (err) {
     console.error("Dojah KYC route error:", err);
     return res.status(500).json({
       ok: false,
       status: "FAILED",
-      error: "Server error while verifying KYC.",
+      error: "Server error while verifying KYC."
     });
   }
 });
