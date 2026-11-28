@@ -1175,6 +1175,20 @@
     const PAYSTACK_PUBLIC_KEY = 'pk_test_2fd1d0be93e6366a495246fcab17d7a02eb3ab92';
     const SUPPORT_EMAIL = 'support@nikofy.ng';
 
+    const SIX_DECIMAL_ASSETS = new Set(['BTC', 'ETH', 'BNB', 'SOL']);
+
+    function getAssetPrecisionScale(asset) {
+      return SIX_DECIMAL_ASSETS.has(String(asset || '').toUpperCase()) ? 1e6 : 1e2;
+    }
+
+    function toMinorUnits(amount, asset) {
+      return Math.round(Number(amount || 0) * getAssetPrecisionScale(asset));
+    }
+
+    function fromMinorUnits(minor, asset) {
+      return Number(minor || 0) / getAssetPrecisionScale(asset);
+    }
+
     // Comprehensive Nigerian Commercial, Non-Interest, Digital/PSB & Microfinance Banks
     const NIGERIAN_BANKS = [
       { code: '044', name: 'Access Bank Plc', type: 'Commercial' },
@@ -1525,9 +1539,6 @@
     let pendingTransactionAction = null;
     let pendingTotpAction = null;
 
-    // =====================================================================
-    // WITHDRAWAL BANK SEARCH + ACCOUNT NAME VERIFICATION
-    // =====================================================================
     function renderWithdrawalBankOptions(selectedCode = '') {
       const sel = document.getElementById('withdraw-bank');
       const searchEl = document.getElementById('withdraw-bank-search');
@@ -1874,10 +1885,14 @@
         if (Array.isArray(data.wallets)) {
           data.wallets.forEach((w) => {
             const sym = String(w.asset || '').toUpperCase();
+            const rawMinor = Number(w.availableBalanceMinor ?? w.balanceMinor ?? 0);
             if (sym === 'NGN') {
-              appState.balances.NGN = Number(w.availableBalanceMinor ?? w.balanceMinor ?? 0) / 100;
-            } else if (['USDT', 'USDC', 'BTC', 'ETH', 'BNB'].includes(sym)) {
-              appState.balances[sym] = Number(w.availableBalanceMinor ?? w.balanceMinor ?? 0) / 100;
+              appState.balances.NGN = rawMinor / 100;
+            } else if (['USDT', 'USDC', 'BTC', 'ETH', 'BNB', 'SOL'].includes(sym)) {
+              const scale = getAssetPrecisionScale(sym);
+              appState.balances[sym] = scale === 1e6 && Number.isInteger(rawMinor) && rawMinor % 10000 === 0 && rawMinor < 1e8
+                ? rawMinor / 100
+                : rawMinor / scale;
             }
           });
         }
@@ -2018,9 +2033,6 @@
       showToast('Transaction cancelled.', 'info');
     }
 
-    // =====================================================================
-    // 6-DIGIT GOOGLE AUTHENTICATOR 2FA PROMPT FOR WITHDRAWALS & PAYOUTS
-    // =====================================================================
     function requestAuthenticator2FA(summaryText, onVerified) {
       if (!appState.user.twoFactorEnabled) {
         showToast('Enable Google Authenticator 2FA in Settings before withdrawing to a bank or external wallet.', 'error');
@@ -2175,9 +2187,6 @@
       return '₦' + Number(v || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // =====================================================================
-    // CAPTCHA & REAL SENDGRID EMAIL OTP AUTH
-    // =====================================================================
     function refreshCaptcha(mode) {
       const a = Math.floor(Math.random() * 9) + 2;
       const b = Math.floor(Math.random() * 9) + 1;
@@ -2516,9 +2525,6 @@
       navigateTo(appState.ui.activeTab || 'home');
     }
 
-    // =====================================================================
-    // NAVIGATION, UI SYNC & AUTO-FREEZE CHECK
-    // =====================================================================
     function navigateTo(tab) {
       appState.ui.activeTab = tab;
       saveState();
@@ -2569,7 +2575,7 @@
       document.getElementById('bal-ngn').textContent = formatNgn(appState.balances.NGN);
       document.getElementById('bal-usdt').textContent = `${Number(appState.balances.USDT).toFixed(2)} USDT`;
       document.getElementById('bal-btc').textContent = `${Number(appState.balances.BTC).toFixed(6)} BTC`;
-      document.getElementById('bal-eth-bnb').textContent = `${Number(appState.balances.ETH).toFixed(3)} ETH • ${Number(appState.balances.BNB).toFixed(2)} BNB`;
+      document.getElementById('bal-eth-bnb').textContent = `${Number(appState.balances.ETH).toFixed(4)} ETH • ${Number(appState.balances.BNB).toFixed(4)} BNB`;
 
       document.getElementById('ngn-limit-note').textContent = tier.maxNgn === Infinity ? 'Tier 2: Unlimited NGN Balance' : 'Tier 1 Max: ₦1,000,000';
       document.getElementById('usd-limit-note').textContent = tier.maxUsd === Infinity ? 'Tier 2: Unlimited USD Balance' : 'Tier 1 Max: $5,000';
@@ -2608,9 +2614,6 @@
       renderLedgerViews();
     }
 
-    // =====================================================================
-    // LIVE CRYPTO MARKET CHART (BTC, USDT, ETH, BNB, SOL)
-    // =====================================================================
     function selectMarketCoin(coin, { skipChartFetch = false } = {}) {
       appState.ui.marketCoin = coin;
       saveState();
@@ -2660,9 +2663,6 @@
       }
     }
 
-    // =====================================================================
-    // BUY / SELL CRYPTO
-    // =====================================================================
     function openTradeTab(side) { setTradeSide(side); navigateTo('trade'); }
 
     function setTradeSide(side) {
@@ -2681,8 +2681,9 @@
       const asset = document.getElementById('trade-asset').value;
       const rate = MARKET_COINS[asset].price;
       const side = appState.ui.tradeSide;
+      const decimals = SIX_DECIMAL_ASSETS.has(asset) ? 6 : 2;
       document.getElementById('quote-rate').textContent = `1 ${asset} = ${formatNgn(rate)}`;
-      document.getElementById('trade-available-crypto').textContent = `Available: ${Number(appState.balances[asset] || 0).toFixed(4)} ${asset}`;
+      document.getElementById('trade-available-crypto').textContent = `Available: ${Number(appState.balances[asset] || 0).toFixed(decimals)} ${asset}`;
 
       if (side === 'buy') {
         const ngn = Number(document.getElementById('trade-ngn-amount').value || 0);
@@ -2690,7 +2691,7 @@
         const out = (ngn - fee) / rate;
         document.getElementById('quote-fee').textContent = formatNgn(fee);
         document.getElementById('quote-receive-label').textContent = `You Receive (${asset})`;
-        document.getElementById('quote-receive-value').textContent = `${out.toFixed(asset === 'BTC' ? 6 : 2)} ${asset}`;
+        document.getElementById('quote-receive-value').textContent = `${out.toFixed(decimals)} ${asset}`;
       } else {
         const amt = Number(document.getElementById('trade-crypto-amount').value || 0);
         const gross = amt * rate;
@@ -2709,43 +2710,105 @@
       }
       const asset = document.getElementById('trade-asset').value;
       const rate = MARKET_COINS[asset].price;
+      const decimals = SIX_DECIMAL_ASSETS.has(asset) ? 6 : 2;
+
       if (appState.ui.tradeSide === 'buy') {
         const ngn = Number(document.getElementById('trade-ngn-amount').value || 0);
         if (ngn > appState.balances.NGN) return showToast('Insufficient NGN balance.', 'error');
         const out = (ngn * 0.995) / rate;
-        authorizeTransactionWithPasscode(`Buy ${out.toFixed(4)} ${asset} for ${formatNgn(ngn)}`, () => {
-          appState.balances.NGN -= ngn;
-          appState.balances[asset] = (appState.balances[asset] || 0) + out;
-          recordAndOpenInvoice({
-            type: 'BUY_CRYPTO',
-            title: `Bought ${out.toFixed(4)} ${asset}`,
-            subtitle: `Paid ${formatNgn(ngn)}`,
-            amountText: `+${out.toFixed(4)} ${asset}`,
-            invoice: { 'NGN Paid': formatNgn(ngn), 'Spread (0.5%)': formatNgn(ngn * 0.005), 'Crypto Credited': `${out.toFixed(4)} ${asset}` }
-          });
+
+        authorizeTransactionWithPasscode(`Buy ${out.toFixed(decimals)} ${asset} for ${formatNgn(ngn)}`, async () => {
+          if (appState.authToken) {
+            const res = await fetch(`${API_BASE_URL}/api/trade/execute`, {
+              method: 'POST',
+              headers: getNikofyAuthHeaders(),
+              body: JSON.stringify({
+                side: 'BUY',
+                asset,
+                ngnAmount: ngn,
+                rateNgn: rate,
+              }),
+            });
+            const data = await parseJsonSafe(res);
+            if (!res.ok || !data.ok) {
+              showToast(data.error || 'Crypto purchase failed.', 'error');
+              return;
+            }
+            await syncBackendWalletSnapshot();
+            const credited = Number(data.cryptoCredited ?? out);
+            recordAndOpenInvoice({
+              id: data.reference,
+              type: 'BUY_CRYPTO',
+              title: `Bought ${credited.toFixed(decimals)} ${asset}`,
+              subtitle: `Paid ${formatNgn(ngn)}`,
+              amountText: `+${credited.toFixed(decimals)} ${asset}`,
+              invoice: {
+                'NGN Paid': formatNgn(ngn),
+                'Spread (0.5%)': formatNgn(ngn * 0.005),
+                'Crypto Credited': `${credited.toFixed(decimals)} ${asset}`,
+              },
+            });
+          } else {
+            appState.balances.NGN -= ngn;
+            appState.balances[asset] = (appState.balances[asset] || 0) + out;
+            recordAndOpenInvoice({
+              type: 'BUY_CRYPTO',
+              title: `Bought ${out.toFixed(decimals)} ${asset}`,
+              subtitle: `Paid ${formatNgn(ngn)}`,
+              amountText: `+${out.toFixed(decimals)} ${asset}`,
+              invoice: { 'NGN Paid': formatNgn(ngn), 'Spread (0.5%)': formatNgn(ngn * 0.005), 'Crypto Credited': `${out.toFixed(decimals)} ${asset}` },
+            });
+          }
         });
       } else {
         const amt = Number(document.getElementById('trade-crypto-amount').value || 0);
         if (amt > (appState.balances[asset] || 0)) return showToast(`Insufficient ${asset} balance.`, 'error');
         const netNgn = amt * rate * 0.995;
-        authorizeTransactionWithPasscode(`Sell ${amt} ${asset} for ${formatNgn(netNgn)}`, () => {
-          appState.balances[asset] -= amt;
-          appState.balances.NGN += netNgn;
-          checkTier1AutoFreeze();
-          recordAndOpenInvoice({
-            type: 'SELL_CRYPTO',
-            title: `Sold ${amt} ${asset}`,
-            subtitle: `Credited ${formatNgn(netNgn)}`,
-            amountText: `+${formatNgn(netNgn)}`,
-            invoice: { 'Crypto Sold': `${amt} ${asset}`, 'Net NGN Credited': formatNgn(netNgn) }
-          });
+
+        authorizeTransactionWithPasscode(`Sell ${amt} ${asset} for ${formatNgn(netNgn)}`, async () => {
+          if (appState.authToken) {
+            const res = await fetch(`${API_BASE_URL}/api/trade/execute`, {
+              method: 'POST',
+              headers: getNikofyAuthHeaders(),
+              body: JSON.stringify({
+                side: 'SELL',
+                asset,
+                cryptoAmount: amt,
+                rateNgn: rate,
+              }),
+            });
+            const data = await parseJsonSafe(res);
+            if (!res.ok || !data.ok) {
+              showToast(data.error || 'Crypto sale failed.', 'error');
+              return;
+            }
+            await syncBackendWalletSnapshot();
+            checkTier1AutoFreeze();
+            const creditedNgn = Number(data.ngnCredited ?? netNgn);
+            recordAndOpenInvoice({
+              id: data.reference,
+              type: 'SELL_CRYPTO',
+              title: `Sold ${amt} ${asset}`,
+              subtitle: `Credited ${formatNgn(creditedNgn)}`,
+              amountText: `+${formatNgn(creditedNgn)}`,
+              invoice: { 'Crypto Sold': `${amt} ${asset}`, 'Net NGN Credited': formatNgn(creditedNgn) },
+            });
+          } else {
+            appState.balances[asset] -= amt;
+            appState.balances.NGN += netNgn;
+            checkTier1AutoFreeze();
+            recordAndOpenInvoice({
+              type: 'SELL_CRYPTO',
+              title: `Sold ${amt} ${asset}`,
+              subtitle: `Credited ${formatNgn(netNgn)}`,
+              amountText: `+${formatNgn(netNgn)}`,
+              invoice: { 'Crypto Sold': `${amt} ${asset}`, 'Net NGN Credited': formatNgn(netNgn) },
+            });
+          }
         });
       }
     }
 
-    // =====================================================================
-    // NGN DEPOSIT (PAYSTACK), EXTERNAL CRYPTO, P2P @USERNAME, WITHDRAW
-    // =====================================================================
     function openTransferTab(sub) { setTransferSubtab(sub); navigateTo('transfer'); }
 
     function setTransferSubtab(sub) {
@@ -2928,7 +2991,7 @@
           const res = await fetch(`${API_BASE_URL}/api/crypto/deposit-address`, {
             method: 'POST',
             headers: getNikofyAuthHeaders(),
-            body: JSON.stringify({ asset, amountUsd }),
+            body: JSON.stringify({ asset, network: net, amountUsd }),
           });
           const data = await parseJsonSafe(res);
           if (!res.ok || !data.ok) {
@@ -3227,9 +3290,6 @@
       });
     }
 
-    // =====================================================================
-    // LIVE DATA PLANS, CABLE BOUQUETS & BILL PAYMENTS (RENDER + VTPASS)
-    // =====================================================================
     async function loadLiveBillVariations(cat, providerCode) {
       activeBillVariations = [];
       const statusEl = document.getElementById('bill-variations-status');
@@ -3483,9 +3543,6 @@
       });
     }
 
-    // =====================================================================
-    // LEDGER, INVOICE MODAL, KYC LIVENESS & SETTINGS (INCLUDING GOOGLE 2FA)
-    // =====================================================================
     function recordAndOpenInvoice(item) {
       const tx = {
         id: item.id || ('NIKO-' + Math.floor(10000 + Math.random() * 90000)),
@@ -3619,41 +3676,36 @@
           method: 'POST',
           headers: getNikofyAuthHeaders(),
           body: JSON.stringify({
-            userId: appState.user?.id || null,
+            userId: appState.user.id,
             tier,
             idNumber,
             dateOfBirth,
             selfieImage,
-            currentBalanceNgn: Number(appState.balances?.NGN || 0),
           }),
         });
-        const data = await res.json().catch(() => ({}));
-
+        const data = await parseJsonSafe(res);
         if (!res.ok || !data.ok) {
           showToast(data.error || 'KYC verification failed.', 'error');
           return;
         }
 
-        const nextTier = data.kycTier || tier;
-        const nextFrozen = typeof data.frozen === 'boolean'
-          ? data.frozen
-          : (nextTier === 'TIER_1' && Number(appState.balances?.NGN || 0) > 1000000);
-
-        appState.user.kycStatus = 'Verified';
-        appState.user.kycTier = nextTier;
+        appState.user.kycTier = data.kycTier || tier;
+        appState.user.kycStatus = data.kycStatus || 'Verified';
         appState.user.dateOfBirth = dateOfBirth;
-        appState.user.frozen = nextFrozen;
+        if (data.accountStatus === 'ACTIVE' || appState.user.kycTier === 'TIER_2') {
+          appState.user.frozen = false;
+        }
         saveState();
         syncAllUI();
         closeModal('modal-kyc');
         showToast(
-          nextFrozen
-            ? 'Verified, but account FROZEN: Tier 1 balance exceeds ₦1,000,000.'
-            : `Verified (${KYC_LIMITS[nextTier]?.name || nextTier})!`,
-          nextFrozen ? 'error' : 'success'
+          appState.user.kycTier === 'TIER_2'
+            ? 'Tier 2 (NIN) Verified! Account unlocked & limits expanded.'
+            : 'Tier 1 (BVN) Verified!',
+          'success'
         );
       } catch (err) {
-        showToast('Network error connecting to KYC server.', 'error');
+        showToast('Network error submitting KYC verification.', 'error');
       }
     }
 
@@ -3662,89 +3714,92 @@
       appState.user.email = document.getElementById('set-email').value.trim();
       appState.user.phone = document.getElementById('set-phone').value.trim();
       const pw = document.getElementById('set-password').value;
-      const pin = document.getElementById('set-pin').value;
+      const pin = document.getElementById('set-pin').value.trim();
       if (pw) appState.user.password = pw;
-      if (pin) {
-        if (!/^[0-9]{4}$/.test(pin)) return showToast('PIN must be 4 digits.', 'error');
+      if (pin && /^[0-9]{4}$/.test(pin)) {
         appState.user.pin = pin;
-        appState.user.transactionPasscode = pin;
-        syncPasscodeToBackend(pin);
+        if (!isValidFourDigitPasscode(appState.user.transactionPasscode)) {
+          appState.user.transactionPasscode = pin;
+        }
       }
       saveState();
       syncAllUI();
       showToast('Account settings saved.', 'success');
     }
 
-    async function renderTwoFaQrCode(otpauthUrl, fallbackQrDataUrl) {
-      const qrImg = document.getElementById('twofa-qr-img');
-      const qrFallback = document.getElementById('twofa-qr-fallback');
-      if (!qrImg) return;
+    async function render2FAQrCode(otpauthUrl, secretText) {
+      const imgEl = document.getElementById('twofa-qr-img');
+      const fallbackSvg = document.getElementById('twofa-qr-fallback');
+      const previewEl = document.getElementById('twofa-otpauth-preview');
+      const payload = otpauthUrl || `otpauth://totp/Nikofy.ng:${encodeURIComponent(appState.user.email || 'user')}?secret=${encodeURIComponent(secretText)}&issuer=Nikofy.ng`;
 
-      if (otpauthUrl && typeof QRCode !== 'undefined' && typeof QRCode.toDataURL === 'function') {
+      if (previewEl) {
+        previewEl.textContent = payload;
+      }
+
+      if (typeof QRCode !== 'undefined' && QRCode.toDataURL && imgEl) {
         try {
-          const dataUrl = await QRCode.toDataURL(otpauthUrl, { width: 220, margin: 1 });
-          qrImg.src = dataUrl;
-          qrImg.classList.remove('hidden');
-          if (qrFallback) qrFallback.classList.add('hidden');
+          const dataUrl = await QRCode.toDataURL(payload, {
+            width: 140,
+            margin: 1,
+            color: { dark: '#0F172A', light: '#FFFFFF' },
+          });
+          imgEl.src = dataUrl;
+          imgEl.classList.remove('hidden');
+          if (fallbackSvg) fallbackSvg.classList.add('hidden');
           return;
         } catch (err) {
-          console.warn('Client QRCode render fallback:', err);
+          console.warn('QRCode dataURL fallback:', err);
         }
       }
 
-      if (fallbackQrDataUrl) {
-        qrImg.src = fallbackQrDataUrl;
-        qrImg.classList.remove('hidden');
-        if (qrFallback) qrFallback.classList.add('hidden');
-      } else {
-        qrImg.classList.add('hidden');
-        if (qrFallback) qrFallback.classList.remove('hidden');
-      }
+      if (imgEl) imgEl.classList.add('hidden');
+      if (fallbackSvg) fallbackSvg.classList.remove('hidden');
     }
 
     async function start2FASetup() {
       const btn = document.getElementById('btn-start-2fa');
-      const box = document.getElementById('twofa-setup-box');
-      const keyEl = document.getElementById('twofa-manual-key');
-      const urlPreview = document.getElementById('twofa-otpauth-preview');
-
-      if (!appState.authToken) {
-        showToast('Sign in with your 6-digit email OTP first to generate a live Authenticator secret.', 'error');
-        return;
-      }
-
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Generating Secret...';
+        btn.textContent = 'Generating Authenticator Key...';
       }
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/security/totp/setup`, {
-          method: 'POST',
-          headers: getNikofyAuthHeaders(),
-        });
-        const data = await parseJsonSafe(res);
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || 'Could not generate Google Authenticator setup key.');
+        let secret = appState.user.twoFactorKey;
+        let otpauthUrl = appState.user.twoFactorOtpauthUrl;
+
+        if (appState.authToken) {
+          const res = await fetch(`${API_BASE_URL}/api/2fa/totp/setup`, {
+            method: 'POST',
+            headers: getNikofyAuthHeaders(),
+            body: JSON.stringify({ userId: appState.user.id }),
+          });
+          const data = await parseJsonSafe(res);
+          if (!res.ok || !data.ok) {
+            throw new Error(data.error || 'Failed to generate TOTP setup key.');
+          }
+          secret = data.secret;
+          otpauthUrl = data.otpauthUrl;
+        } else if (!secret) {
+          const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+          let gen = '';
+          for (let i = 0; i < 24; i++) {
+            gen += alphabet[Math.floor(Math.random() * alphabet.length)];
+          }
+          secret = gen;
         }
 
-        const secret = data.manualEntryKey || data.secret || '';
-        const otpauthUrl = data.otpauthUrl || '';
-
         appState.user.twoFactorKey = secret;
-        appState.user.twoFactorOtpauthUrl = otpauthUrl;
+        appState.user.twoFactorOtpauthUrl = otpauthUrl || '';
         saveState();
 
-        if (keyEl) keyEl.textContent = secret;
-        if (urlPreview) urlPreview.textContent = otpauthUrl ? `Issuer: Nikofy.ng (${appState.user.email})` : '';
-
-        await renderTwoFaQrCode(otpauthUrl, data.qrCodeDataUrl || '');
-
-        if (box) box.classList.remove('hidden');
-        document.getElementById('twofa-code-input')?.focus();
-        showToast('Scan QR or copy setup key into Google Authenticator.', 'info');
+        document.getElementById('twofa-manual-key').textContent = secret;
+        document.getElementById('twofa-code-input').value = '';
+        await render2FAQrCode(otpauthUrl, secret);
+        document.getElementById('twofa-setup-box').classList.remove('hidden');
+        showToast('Authenticator QR & setup key ready. Scan in Google Authenticator and enter the 6-digit code.', 'info');
       } catch (err) {
-        showToast(err.message || '2FA setup failed.', 'error');
+        showToast(err.message || 'Could not start 2FA setup.', 'error');
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -3754,155 +3809,154 @@
     }
 
     async function copy2FAKey() {
-      const key = document.getElementById('twofa-manual-key').textContent.trim();
+      const key = document.getElementById('twofa-manual-key')?.textContent?.trim() || appState.user.twoFactorKey;
+      if (!key) return;
       try {
         await navigator.clipboard.writeText(key);
-        showToast('Google Authenticator setup key copied.', 'success');
-      } catch (e) {
-        showToast('Copy key: ' + key, 'info');
+        showToast('Authenticator setup key copied.', 'success');
+      } catch {
+        showToast('Setup key ready to copy.', 'info');
       }
     }
 
     async function confirm2FASetup() {
-      const inputEl = document.getElementById('twofa-code-input');
-      const btn = document.getElementById('btn-confirm-2fa');
-      const code = (inputEl?.value || '').trim();
+      const code = document.getElementById('twofa-code-input').value.trim();
+      const confirmBtn = document.getElementById('btn-confirm-2fa');
 
       if (!/^[0-9]{6}$/.test(code)) {
-        return showToast('Enter the 6-digit code from Google Authenticator.', 'error');
+        return showToast('Enter a valid 6-digit Authenticator code.', 'error');
       }
 
-      if (!appState.authToken) {
-        return showToast('Sign in with your 6-digit email OTP first.', 'error');
-      }
-
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Verifying Code...';
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Verifying 6-Digit Code...';
       }
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/security/totp/verify`, {
-          method: 'POST',
-          headers: getNikofyAuthHeaders(),
-          body: JSON.stringify({ code, totpCode: code, totp: code }),
-        });
-        const data = await parseJsonSafe(res);
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || 'Invalid 6-digit Authenticator code.');
+        if (appState.authToken) {
+          const res = await fetch(`${API_BASE_URL}/api/2fa/totp/verify-setup`, {
+            method: 'POST',
+            headers: getNikofyAuthHeaders(),
+            body: JSON.stringify({
+              userId: appState.user.id,
+              code,
+              totpCode: code,
+              token: code,
+              secret: appState.user.twoFactorKey,
+            }),
+          });
+          const data = await parseJsonSafe(res);
+          if (!res.ok || !data.ok) {
+            showToast(data.error || 'Invalid 6-digit Google Authenticator code. Check your phone clock and try again.', 'error');
+            return;
+          }
+          appState.user.twoFactorEnabled = Boolean(data.totpEnabled ?? true);
+          appState.user.twoFactorKey = '';
+          appState.user.twoFactorOtpauthUrl = '';
+        } else {
+          appState.user.twoFactorEnabled = !appState.user.twoFactorEnabled;
         }
 
-        appState.user.twoFactorEnabled = typeof data.totpEnabled === 'boolean' ? data.totpEnabled : true;
         saveState();
-        if (inputEl) inputEl.value = '';
-        document.getElementById('twofa-setup-box').classList.add('hidden');
         syncAllUI();
-        showToast('Google Authenticator 2FA verified & active!', 'success');
+        document.getElementById('twofa-setup-box').classList.add('hidden');
+        document.getElementById('twofa-code-input').value = '';
+        showToast(
+          appState.user.twoFactorEnabled
+            ? 'Google Authenticator 2FA enabled!'
+            : 'Google Authenticator 2FA disabled.',
+          'success'
+        );
       } catch (err) {
-        showToast(err.message || 'Invalid 6-digit Authenticator code.', 'error');
+        showToast(err.message || '2FA verification error.', 'error');
       } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = 'Verify & Toggle 2FA';
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Verify & Toggle 2FA';
         }
       }
     }
 
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-    // =====================================================================
-    // BACKEND API CONNECTOR (https://nikofy-ng-1.onrender.com)
-    // =====================================================================
-    async function parseJsonSafe(response) {
-      const text = await response.text();
-      if (!text) return {};
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        return { raw: text };
-      }
+    function parseJsonSafe(response) {
+      return response.text().then((text) => {
+        try { return JSON.parse(text); } catch { return { rawText: text }; }
+      });
     }
 
-    async function checkBackendHealth() {
-      const statusText = document.getElementById('backend-status-text');
-      if (statusText) statusText.textContent = 'Checking Render backend...';
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/health`);
-        const data = await parseJsonSafe(res);
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        if (statusText) {
-          statusText.textContent = `Connected (${data.service || 'nikofy-backend'} • ${data.status || 'ok'})`;
-        }
-        return data;
-      } catch (err) {
-        if (statusText) {
-          statusText.textContent = `Backend connection failed: ${err.message}`;
-        }
-        return null;
-      }
-    }
-
-    async function verifyNikofyPasscode(userId, passcode) {
-      const res = await fetch(`${API_BASE_URL}/api/security/passcode/verify`, {
+    function verifyNikofyPasscode(userId, passcode) {
+      return fetch(`${API_BASE_URL}/api/security/passcode/verify`, {
         method: 'POST',
         headers: getNikofyAuthHeaders(),
         body: JSON.stringify({ userId, passcode }),
-      });
-      const data = await parseJsonSafe(res);
-      if (!res.ok) {
-        return { ok: false, error: data.error || `HTTP ${res.status}` };
-      }
-      return data;
+      })
+        .then(async (res) => {
+          const data = await parseJsonSafe(res);
+          if (!res.ok) return { ok: false, status: res.status, error: data.error || data.message || `HTTP ${res.status}` };
+          return data;
+        })
+        .catch((err) => ({ ok: false, error: err.message || 'Network error' }));
     }
 
-    async function fetchLiveCoinChart(coinSymbol) {
-      const sym = String(coinSymbol || 'BTC').toUpperCase();
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/market/chart/${encodeURIComponent(sym)}`);
-        const data = await parseJsonSafe(res);
-        if (!res.ok || !data.ok) return null;
-
-        if (MARKET_COINS[sym]) {
-          const livePrice = Number(data.priceNgn || data.price || 0);
-          if (livePrice > 0) MARKET_COINS[sym].price = livePrice;
-          if (typeof data.change24h === 'number') {
-            const sign = data.change24h >= 0 ? '+' : '';
-            MARKET_COINS[sym].change = `${sign}${data.change24h.toFixed(2)}%`;
-            MARKET_COINS[sym].positive = data.change24h >= 0;
+    function fetchLiveCoinChart(coin) {
+      const symbolMap = { BTC: 'bitcoin', USDT: 'tether', ETH: 'ethereum', BNB: 'binancecoin', SOL: 'solana' };
+      const coinId = symbolMap[coin] || 'bitcoin';
+      return fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=ngn&days=1`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          const prices = Array.isArray(data?.prices) ? data.prices.map((p) => Number(p[1])).filter((n) => Number.isFinite(n) && n > 0) : [];
+          if (prices.length >= 2 && MARKET_COINS[coin]) {
+            const sampled = prices.filter((_, idx) => idx % Math.max(1, Math.floor(prices.length / 8)) === 0).slice(-8);
+            const latest = prices[prices.length - 1];
+            const first = prices[0];
+            const pct = (((latest - first) / (first || 1)) * 100).toFixed(2);
+            MARKET_COINS[coin].price = latest;
+            MARKET_COINS[coin].points = sampled;
+            MARKET_COINS[coin].positive = Number(pct) >= 0;
+            MARKET_COINS[coin].change = `${Number(pct) >= 0 ? '+' : ''}${pct}%`;
+            if (appState.ui.marketCoin === coin) {
+              selectMarketCoin(coin, { skipChartFetch: true });
+              updateTradeQuote();
+            }
           }
-          if (Array.isArray(data.points) && data.points.length >= 2) {
-            MARKET_COINS[sym].points = data.points.map(Number);
-          }
-          if (appState.ui.marketCoin === sym) {
-            selectMarketCoin(sym, { skipChartFetch: true });
-          }
-        }
-        return data;
-      } catch (err) {
-        console.warn('Live chart fetch skipped:', err.message || err);
-        return null;
-      }
+          return data;
+        })
+        .catch(() => null);
     }
 
-    document.getElementById('test-backend-btn')?.addEventListener('click', checkBackendHealth);
+    document.addEventListener('DOMContentLoaded', async () => {
+      applyTheme();
+      refreshCaptcha('signin');
+      refreshCaptcha('signup');
+      renderWithdrawalBankOptions();
+      setBillCategory(appState.ui.billCategory || 'DATA');
+      setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
 
-    // Boot Application
-    applyTheme();
-    refreshCaptcha('signin');
-    refreshCaptcha('signup');
-    renderWithdrawalBankOptions();
-    fetchLiveNigerianBanks();
-    setBillCategory(appState.ui.billCategory || 'DATA');
-    setTradeSide(appState.ui.tradeSide || 'buy');
-    setTransferSubtab(appState.ui.transferSubtab || 'ngn-deposit');
-    if (appState.authenticated) {
-      enterDashboard();
-      syncBackendWalletSnapshot();
-    } else {
+      const testBtn = document.getElementById('test-backend-btn');
+      const statusText = document.getElementById('backend-status-text');
+      if (testBtn && statusText) {
+        testBtn.addEventListener('click', async () => {
+          statusText.textContent = 'Checking backend...';
+          try {
+            const r = await fetch(`${API_BASE_URL}/api/health`);
+            const j = await r.json();
+            statusText.textContent = r.ok ? `Connected: ${j.status || 'ok'}` : `Error (${r.status})`;
+          } catch (err) {
+            statusText.textContent = 'Failed to reach backend';
+          }
+        });
+      }
+
+      if (appState.authenticated) {
+        enterDashboard();
+        await syncBackendWalletSnapshot();
+      } else {
+        document.getElementById('auth-screen').classList.remove('hidden');
+      }
       syncAllUI();
-    }
-    checkBackendHealth();
-    fetchLiveCoinChart(appState.ui.marketCoin || 'BTC');
+      fetchLiveNigerianBanks();
+    });
   </script>
 </body>
 </html>
