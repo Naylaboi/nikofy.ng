@@ -52,6 +52,54 @@ const VTPASS_SERVICE_MAP = {
     AIRTEL: "airtel-data",
     GLO: "glo-data",
     "9MOBILE": "etisalat-data"
+  },
+  ELECTRICITY: {
+    APLE: "aba-electric",
+    ABA: "aba-electric",
+    IKEDC: "ikeja-electric",
+    EKEDC: "eko-electric",
+    AEDC: "abuja-electric",
+    KEDCO: "kano-electric",
+    PHED: "portharcourt-electric",
+    JED: "jos-electric",
+    IBEDC: "ibadan-electric",
+    KAEDCO: "kaduna-electric",
+    EEDC: "enugu-electric",
+    BEDC: "benin-electric",
+    YEDC: "yola-electric"
+  },
+  POWER: {
+    APLE: "aba-electric",
+    ABA: "aba-electric",
+    IKEDC: "ikeja-electric",
+    EKEDC: "eko-electric",
+    AEDC: "abuja-electric",
+    KEDCO: "kano-electric",
+    PHED: "portharcourt-electric",
+    JED: "jos-electric",
+    IBEDC: "ibadan-electric",
+    KAEDCO: "kaduna-electric",
+    EEDC: "enugu-electric",
+    BEDC: "benin-electric",
+    YEDC: "yola-electric"
+  },
+  CABLE: {
+    DSTV: "dstv",
+    GOTV: "gotv",
+    STARTIMES: "startimes",
+    SHOWMAX: "showmax"
+  },
+  CABLE_TV: {
+    DSTV: "dstv",
+    GOTV: "gotv",
+    STARTIMES: "startimes",
+    SHOWMAX: "showmax"
+  },
+  TV: {
+    DSTV: "dstv",
+    GOTV: "gotv",
+    STARTIMES: "startimes",
+    SHOWMAX: "showmax"
   }
 };
 
@@ -82,7 +130,7 @@ function getVtpassRequestId() {
   return `${map.year}${map.month}${map.day}${map.hour}${map.minute}${suffix}`;
 }
 
-async function resolveVtpassDataVariation({ serviceID, planLabel, variationCode, amountNaira }) {
+async function resolveVtpassVariation({ serviceID, planLabel, variationCode, amountNaira }) {
   if (variationCode && String(variationCode).trim()) {
     return {
       variationCode: String(variationCode).trim(),
@@ -132,17 +180,49 @@ async function resolveVtpassDataVariation({ serviceID, planLabel, variationCode,
     }
   }
 
+  if (normalizedLabel) {
+    const cleanTokens = normalizedLabel
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length >= 2 && !["tv", "subscription", "plan", "bundle"].includes(t));
+    if (cleanTokens.length) {
+      const byName = variations.find((v) => {
+        const vName = String(v.name || "").toLowerCase();
+        return cleanTokens.every((tok) => vName.includes(tok));
+      });
+      if (byName) {
+        return {
+          variationCode: String(byName.variation_code),
+          variationAmountNaira: Number(byName.variation_amount || amountNaira)
+        };
+      }
+    }
+  }
+
   if (amountNaira > 0) {
-    const byPrice = variations.find((v) => Number(v.variation_amount || 0) === amountNaira);
-    if (byPrice) {
+    const exactPrice = variations.find((v) => Number(v.variation_amount || 0) === amountNaira);
+    if (exactPrice) {
       return {
-        variationCode: String(byPrice.variation_code),
-        variationAmountNaira: Number(byPrice.variation_amount || amountNaira)
+        variationCode: String(exactPrice.variation_code),
+        variationAmountNaira: Number(exactPrice.variation_amount || amountNaira)
+      };
+    }
+    const closestPrice = variations.find((v) => {
+      const vAmt = Number(v.variation_amount || 0);
+      return vAmt > 0 && Math.abs(vAmt - amountNaira) <= 200;
+    });
+    if (closestPrice) {
+      return {
+        variationCode: String(closestPrice.variation_code),
+        variationAmountNaira: Number(closestPrice.variation_amount || amountNaira)
       };
     }
   }
 
-  return null;
+  return {
+    variationCode: String(variations[0].variation_code),
+    variationAmountNaira: Number(variations[0].variation_amount || amountNaira)
+  };
 }
 
 if (SENDGRID_API_KEY) {
@@ -1284,8 +1364,9 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
 });
 
 app.get("/api/bills/variations", requireAuth, async (req, res) => {
-  const cleanCat = String(req.query.category || "DATA").trim().toUpperCase();
-  const cleanProv = String(req.query.providerCode || "").trim().toUpperCase();
+  const rawCat = String(req.query.category || "DATA").trim().toUpperCase();
+  const cleanCat = rawCat === "POWER" ? "ELECTRICITY" : rawCat === "CABLE_TV" || rawCat === "TV" ? "CABLE" : rawCat;
+  const cleanProv = String(req.query.providerCode || req.query.provider || "").trim().toUpperCase();
   const serviceID = VTPASS_SERVICE_MAP[cleanCat]?.[cleanProv] || String(req.query.serviceID || "").trim();
 
   if (!serviceID) {
@@ -1327,6 +1408,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
     customerId,
     phoneNumber,
     meterNumber,
+    meterType = "PREPAID",
     amountKobo,
     amountNaira,
     amount: rawAmount,
@@ -1336,6 +1418,11 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
   } = req.body || {};
 
   const cleanCat = String(category || "DATA").trim().toUpperCase();
+  const normalizedCategory =
+    cleanCat === "POWER" ? "ELECTRICITY"
+    : (cleanCat === "CABLE_TV" || cleanCat === "TV") ? "CABLE"
+    : cleanCat;
+
   const rawProvider = String(providerCode || provider || biller || "")
     .trim()
     .toUpperCase()
@@ -1353,7 +1440,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
   if (!cleanProv || !cleanCust || !Number.isInteger(amount) || amount <= 0) {
     return res.status(400).json({ ok: false, error: "Provider, customer ID, and positive amountKobo are required." });
   }
-  if (["DATA", "AIRTIME"].includes(cleanCat) && !/^0[789][01]\d{8}$/.test(cleanCust)) {
+  if (["DATA", "AIRTIME"].includes(normalizedCategory) && !/^0[789][01]\d{8}$/.test(cleanCust)) {
     return res.status(400).json({ ok: false, error: "Enter a valid 11-digit Nigerian mobile number." });
   }
   if (!VTPASS_API_KEY) {
@@ -1406,7 +1493,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
     }
 
     const reference = getVtpassRequestId();
-    const serviceID = VTPASS_SERVICE_MAP[cleanCat]?.[cleanProv] || cleanProv.toLowerCase();
+    const serviceID = VTPASS_SERVICE_MAP[normalizedCategory]?.[cleanProv] || cleanProv.toLowerCase();
     const amountNaira = Number((amount / 100).toFixed(2));
     const payload = {
       request_id: reference,
@@ -1416,8 +1503,18 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
       amount: amountNaira
     };
 
-    if (cleanCat === "DATA") {
-      const resolvedPlan = await resolveVtpassDataVariation({
+    if (normalizedCategory === "ELECTRICITY") {
+      const cleanMeterType = String(variationCode || meterType || "prepaid")
+        .trim()
+        .toLowerCase()
+        .includes("post")
+        ? "postpaid"
+        : "prepaid";
+      payload.variation_code = cleanMeterType;
+    }
+
+    if (normalizedCategory === "DATA" || normalizedCategory === "CABLE") {
+      const resolvedPlan = await resolveVtpassVariation({
         serviceID,
         planLabel: cleanPlanLabel,
         variationCode,
@@ -1427,11 +1524,13 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({
           ok: false,
-          error: "Could not match data bundle to a VTpass variation_code. Pass variationCode or select a supported plan."
+          error: "Could not match plan/bouquet to a VTpass variation_code."
         });
       }
       payload.variation_code = resolvedPlan.variationCode;
-      payload.amount = Number(resolvedPlan.variationAmountNaira || amountNaira);
+      if (normalizedCategory === "CABLE") {
+        payload.amount = Number(resolvedPlan.variationAmountNaira || amountNaira);
+      }
     }
 
     const vtResp = await fetch(`${VTPASS_BASE_URL}/pay`, {
@@ -1460,7 +1559,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
     );
     const tokenCode = vtData.purchased_code
       ? String(vtData.purchased_code)
-      : (cleanCat === "ELECTRICITY"
+      : (normalizedCategory === "ELECTRICITY"
         ? `${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}-${crypto.randomInt(1000, 10000)}`
         : null);
 
@@ -1482,7 +1581,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
         reference, user_id, category, provider_code, customer_id, plan_label, amount_kobo, token_code, provider_ref, status
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'COMPLETED')`,
-      [reference, userId, cleanCat, cleanProv, cleanCust, cleanPlanLabel, amount, tokenCode, providerRef]
+      [reference, userId, normalizedCategory, cleanProv, cleanCust, cleanPlanLabel, amount, tokenCode, providerRef]
     );
 
     const snapshot = await loadUserWalletSnapshot(client, userId);
