@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
+const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const sgMail = require("@sendgrid/mail");
@@ -53,6 +54,8 @@ function getTotpHelpers() {
 const { generateSecret, generateURI, verifyToken } = getTotpHelpers();
 
 const app = express();
+
+app.use(cors());
 
 // Capture raw body for strict HMAC signature verification on webhooks
 app.use(
@@ -842,6 +845,7 @@ async function verifyUserTotpTx(client, dbUserId, rawToken, { requiredWhenEnable
     return {
       ok: false,
       status: 403,
+      totpRequired: true,
       error: "Enable Google Authenticator 2FA first to complete this action."
     };
   }
@@ -849,6 +853,7 @@ async function verifyUserTotpTx(client, dbUserId, rawToken, { requiredWhenEnable
     return {
       ok: false,
       status: 400,
+      totpRequired: true,
       error: "Authenticator secret is missing. Re-setup Google Authenticator 2FA."
     };
   }
@@ -857,6 +862,7 @@ async function verifyUserTotpTx(client, dbUserId, rawToken, { requiredWhenEnable
     return {
       ok: false,
       status: 400,
+      totpRequired: true,
       error: "Enter a 6-digit Google Authenticator code to confirm this action."
     };
   }
@@ -865,6 +871,7 @@ async function verifyUserTotpTx(client, dbUserId, rawToken, { requiredWhenEnable
     return {
       ok: false,
       status: 401,
+      totpRequired: true,
       error: "Invalid or expired 6-digit Google Authenticator code."
     };
   }
@@ -888,6 +895,89 @@ async function verifyKycApprovedTx(client, dbUserId) {
     };
   }
   return { ok: true, tier: kyc.tier, status: kyc.kyc_status };
+}
+
+async function executeSwapTx(client, userId, { fromAsset, toAsset, fromAmountMinor, toAmountMinor, rate = 1, passcode }) {
+  const srcAsset = String(fromAsset || "").trim().toUpperCase();
+  const dstAsset = String(toAsset || "").trim().toUpperCase();
+  const debitMinor = Math.round(Number(fromAmountMinor));
+  const creditMinor = Math.round(Number(toAmountMinor));
+
+  if (!ASSET_NETWORK_MAP[srcAsset] || !ASSET_NETWORK_MAP[dstAsset] || srcAsset === dstAsset) {
+    return { ok: false, status: 400, error: "Valid distinct source and destination assets are required." };
+  }
+  if (!Number.isInteger(debitMinor) || debitMinor <= 0 || !Number.isInteger(creditMinor) || creditMinor <= 0) {
+    return { ok: false, status: 400, error: "Positive swap amounts are required." };
+  }
+
+  await provisionUserDefaults(client, userId);
+
+  const pinCheck = await verifyUserPasscodeTx(client, userId, passcode, { requiredIfUnset: true });
+  if (!pinCheck.ok) {
+    return { ok: false, status: pinCheck.status, error: pinCheck.error };
+  }
+
+  const srcRes = await client.query(
+    `SELECT id, balance_minor, available_balance_minor
+     FROM wallets WHERE user_id = $1 AND asset = $2
+     ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+    [userId, srcAsset]
+  );
+  const dstRes = await client.query(
+    `SELECT id, balance_minor, available_balance_minor
+     FROM wallets WHERE user_id = $1 AND asset = $2
+     ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+    [userId, dstAsset]
+  );
+
+  if (!srcRes.rows.length || !dstRes.rows.length) {
+    return { ok: false, status: 404, error: "Source or destination wallet not found." };
+  }
+
+  const srcWallet = srcRes.rows[0];
+  const dstWallet = dstRes.rows[0];
+
+  if (Number(srcWallet.available_balance_minor) < debitMinor) {
+    return {
+      ok: false,
+      status: 400,
+      error: `Insufficient ${srcAsset} balance.`,
+      requiredMinor: debitMinor,
+      availableMinor: Number(srcWallet.available_balance_minor)
+    };
+  }
+
+  const nextSrcBalance = Number(srcWallet.balance_minor) - debitMinor;
+  const nextDstBalance = Number(dstWallet.balance_minor) + creditMinor;
+
+  await client.query(
+    `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+    [nextSrcBalance, srcWallet.id]
+  );
+  await client.query(
+    `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
+    [nextDstBalance, dstWallet.id]
+  );
+
+  const reference = `SWP_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+  await client.query(
+    `INSERT INTO wallet_swaps (reference, user_id, from_asset, to_asset, from_amount_minor, to_amount_minor, rate)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [reference, userId, srcAsset, dstAsset, debitMinor, creditMinor, Number(rate) || 1]
+  );
+
+  const snapshot = await loadUserWalletSnapshot(client, userId);
+
+  return {
+    ok: true,
+    reference,
+    fromAsset: srcAsset,
+    toAsset: dstAsset,
+    fromAmountMinor: debitMinor,
+    toAmountMinor: creditMinor,
+    wallets: snapshot.wallets,
+    dailySpend: snapshot.dailySpend
+  };
 }
 
 app.get("/health", async (req, res) => {
@@ -1029,104 +1119,60 @@ app.get("/api/wallets", requireAuth, async (req, res) => {
   }
 });
 
-// PERSISTENT NGN <-> CRYPTO BUY/SELL/SWAP ENDPOINT
+// PERSISTENT NGN <-> CRYPTO BUY/SELL/SWAP ENDPOINTS
 app.post("/api/trade/swap", requireAuth, async (req, res) => {
   const userId = Number(req.auth.sub);
-  const {
-    fromAsset,
-    toAsset,
-    fromAmountMinor,
-    toAmountMinor,
-    rate = 1,
-    passcode
-  } = req.body || {};
-
-  const srcAsset = String(fromAsset || "").trim().toUpperCase();
-  const dstAsset = String(toAsset || "").trim().toUpperCase();
-  const debitMinor = Math.round(Number(fromAmountMinor));
-  const creditMinor = Math.round(Number(toAmountMinor));
-
-  if (!ASSET_NETWORK_MAP[srcAsset] || !ASSET_NETWORK_MAP[dstAsset] || srcAsset === dstAsset) {
-    return res.status(400).json({ ok: false, error: "Valid distinct source and destination assets are required." });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await executeSwapTx(client, userId, req.body || {});
+    if (!result.ok) {
+      await client.query("ROLLBACK");
+      return res.status(result.status || 400).json(result);
+    }
+    await client.query("COMMIT");
+    return res.json(result);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
   }
-  if (!Number.isInteger(debitMinor) || debitMinor <= 0 || !Number.isInteger(creditMinor) || creditMinor <= 0) {
-    return res.status(400).json({ ok: false, error: "Positive swap amounts are required." });
+});
+
+app.post("/api/trade/execute", requireAuth, async (req, res) => {
+  const userId = Number(req.auth.sub);
+  const body = req.body || {};
+  const side = String(body.side || "").trim().toUpperCase();
+  const asset = String(body.asset || "").trim().toUpperCase();
+
+  let normalizedPayload = { ...body };
+  if (!body.fromAsset || !body.toAsset) {
+    if (side === "BUY" && ASSET_NETWORK_MAP[asset] && asset !== "NGN") {
+      normalizedPayload = {
+        ...body,
+        fromAsset: "NGN",
+        toAsset: asset
+      };
+    } else if (side === "SELL" && ASSET_NETWORK_MAP[asset] && asset !== "NGN") {
+      normalizedPayload = {
+        ...body,
+        fromAsset: asset,
+        toAsset: "NGN"
+      };
+    }
   }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await provisionUserDefaults(client, userId);
-
-    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
-    if (!pinCheck.ok) {
+    const result = await executeSwapTx(client, userId, normalizedPayload);
+    if (!result.ok) {
       await client.query("ROLLBACK");
-      return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
+      return res.status(result.status || 400).json(result);
     }
-
-    const srcRes = await client.query(
-      `SELECT id, balance_minor, available_balance_minor
-       FROM wallets WHERE user_id = $1 AND asset = $2
-       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
-      [userId, srcAsset]
-    );
-    const dstRes = await client.query(
-      `SELECT id, balance_minor, available_balance_minor
-       FROM wallets WHERE user_id = $1 AND asset = $2
-       ORDER BY id ASC LIMIT 1 FOR UPDATE`,
-      [userId, dstAsset]
-    );
-
-    if (!srcRes.rows.length || !dstRes.rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ ok: false, error: "Source or destination wallet not found." });
-    }
-
-    const srcWallet = srcRes.rows[0];
-    const dstWallet = dstRes.rows[0];
-
-    if (Number(srcWallet.available_balance_minor) < debitMinor) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({
-        ok: false,
-        error: `Insufficient ${srcAsset} balance.`,
-        requiredMinor: debitMinor,
-        availableMinor: Number(srcWallet.available_balance_minor)
-      });
-    }
-
-    const nextSrcBalance = Number(srcWallet.balance_minor) - debitMinor;
-    const nextDstBalance = Number(dstWallet.balance_minor) + creditMinor;
-
-    await client.query(
-      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
-      [nextSrcBalance, srcWallet.id]
-    );
-    await client.query(
-      `UPDATE wallets SET balance_minor = $1, available_balance_minor = $1 WHERE id = $2`,
-      [nextDstBalance, dstWallet.id]
-    );
-
-    const reference = `SWP_${Date.now()}_${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
-    await client.query(
-      `INSERT INTO wallet_swaps (reference, user_id, from_asset, to_asset, from_amount_minor, to_amount_minor, rate)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [reference, userId, srcAsset, dstAsset, debitMinor, creditMinor, Number(rate) || 1]
-    );
-
-    const snapshot = await loadUserWalletSnapshot(client, userId);
     await client.query("COMMIT");
-
-    return res.json({
-      ok: true,
-      reference,
-      fromAsset: srcAsset,
-      toAsset: dstAsset,
-      fromAmountMinor: debitMinor,
-      toAmountMinor: creditMinor,
-      wallets: snapshot.wallets,
-      dailySpend: snapshot.dailySpend
-    });
+    return res.json(result);
   } catch (err) {
     await client.query("ROLLBACK");
     return res.status(500).json({ ok: false, error: err.message });
@@ -1191,7 +1237,7 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
     await client.query("BEGIN");
     await provisionUserDefaults(client, senderId);
 
-    const pinCheck = await verifyUserPasscodeTx(client, senderId, passcode);
+    const pinCheck = await verifyUserPasscodeTx(client, senderId, passcode, { requiredIfUnset: true });
     if (!pinCheck.ok) {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
@@ -1502,7 +1548,7 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
     await client.query("BEGIN");
     await provisionUserDefaults(client, userId);
 
-    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
+    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode, { requiredIfUnset: true });
     if (!pinCheck.ok) {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
@@ -1519,7 +1565,11 @@ app.post("/api/ngn/withdraw", requireAuth, async (req, res) => {
     });
     if (!totpCheck.ok) {
       await client.query("ROLLBACK");
-      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+      return res.status(totpCheck.status).json({
+        ok: false,
+        totpRequired: Boolean(totpCheck.totpRequired),
+        error: totpCheck.error
+      });
     }
 
     const userRowRes = await client.query(`SELECT full_name FROM users WHERE id = $1`, [userId]);
@@ -1764,7 +1814,7 @@ app.post("/api/bills/pay", requireAuth, async (req, res) => {
     await client.query("BEGIN");
     await provisionUserDefaults(client, userId);
 
-    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
+    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode, { requiredIfUnset: true });
     if (!pinCheck.ok) {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
@@ -2269,7 +2319,7 @@ app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
     await client.query("BEGIN");
     await provisionUserDefaults(client, userId);
 
-    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode);
+    const pinCheck = await verifyUserPasscodeTx(client, userId, passcode, { requiredIfUnset: true });
     if (!pinCheck.ok) {
       await client.query("ROLLBACK");
       return res.status(pinCheck.status).json({ ok: false, error: pinCheck.error });
@@ -2280,7 +2330,11 @@ app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
     });
     if (!totpCheck.ok) {
       await client.query("ROLLBACK");
-      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+      return res.status(totpCheck.status).json({
+        ok: false,
+        totpRequired: Boolean(totpCheck.totpRequired),
+        error: totpCheck.error
+      });
     }
 
     const kycRes = await client.query(
@@ -2965,7 +3019,11 @@ app.post("/api/security/passcode/set", requireAuth, async (req, res) => {
     });
     if (!totpCheck.ok) {
       await client.query("ROLLBACK");
-      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+      return res.status(totpCheck.status).json({
+        ok: false,
+        totpRequired: Boolean(totpCheck.totpRequired),
+        error: totpCheck.error
+      });
     }
 
     const hashed = hashPasscode(String(passcode));
@@ -3007,7 +3065,11 @@ app.post("/api/security/password/change", requireAuth, async (req, res) => {
     });
     if (!totpCheck.ok) {
       await client.query("ROLLBACK");
-      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+      return res.status(totpCheck.status).json({
+        ok: false,
+        totpRequired: Boolean(totpCheck.totpRequired),
+        error: totpCheck.error
+      });
     }
 
     const { rows } = await client.query(
@@ -3058,7 +3120,11 @@ app.post("/api/security/email/change", requireAuth, async (req, res) => {
     });
     if (!totpCheck.ok) {
       await client.query("ROLLBACK");
-      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+      return res.status(totpCheck.status).json({
+        ok: false,
+        totpRequired: Boolean(totpCheck.totpRequired),
+        error: totpCheck.error
+      });
     }
 
     const taken = await client.query(
@@ -3102,7 +3168,11 @@ app.post("/api/security/phone/change", requireAuth, async (req, res) => {
     });
     if (!totpCheck.ok) {
       await client.query("ROLLBACK");
-      return res.status(totpCheck.status).json({ ok: false, error: totpCheck.error });
+      return res.status(totpCheck.status).json({
+        ok: false,
+        totpRequired: Boolean(totpCheck.totpRequired),
+        error: totpCheck.error
+      });
     }
 
     const taken = await client.query(
@@ -3545,12 +3615,17 @@ app.use((err, req, res, next) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, async () => {
+
+async function startServer() {
   try {
     await ensureSchemaTables();
     await ensureOtpTable();
   } catch (err) {
     console.warn("Startup schema check warning:", err.message);
   }
-  console.log(`Nikofy backend listening on port ${port}`);
-});
+  app.listen(port, () => {
+    console.log(`Nikofy backend listening on port ${port}`);
+  });
+}
+
+startServer();
