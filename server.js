@@ -355,6 +355,30 @@ const ASSET_NETWORK_MAP = {
   BNB: { network: "BEP20", minorUnit: "CENTS", npCurrency: "bnbbsc" }
 };
 
+function resolveCryptoSendCents(asset, amountMinor, coinAmount, usdPrice) {
+  const cleanAsset = String(asset || "").trim().toUpperCase();
+  if (cleanAsset === "NGN") {
+    const kobo = Math.round(Number(amountMinor));
+    if (!Number.isInteger(kobo) || kobo < 10000) {
+      return { ok: false, error: "Minimum NGN transfer is ₦100.00 (10000 kobo)." };
+    }
+    return { ok: true, minor: kobo };
+  }
+
+  let cents = Math.round(Number(amountMinor));
+  if ((!Number.isInteger(cents) || cents <= 0) && Number(coinAmount) > 0 && Number(usdPrice) > 0) {
+    cents = Math.round(Number(coinAmount) * Number(usdPrice) * 100);
+  }
+
+  if (!Number.isInteger(cents) || cents < 100) {
+    return {
+      ok: false,
+      error: `Minimum ${cleanAsset} send value must be at least $1.00 USD (100 cents).`
+    };
+  }
+  return { ok: true, minor: cents };
+}
+
 function normalizeUsername(rawUsername) {
   if (rawUsername === undefined || rawUsername === null) return null;
   const cleaned = String(rawUsername).trim().toLowerCase().replace(/^@+/, "");
@@ -986,7 +1010,6 @@ async function executeSwapTx(client, userId, rawBody = {}) {
 
   await provisionUserDefaults(client, userId);
 
-  // Only enforce passcode on swaps if a non-empty passcode was explicitly provided
   if (rawBody.passcode !== undefined && rawBody.passcode !== null && String(rawBody.passcode).trim() !== "") {
     const pinCheck = await verifyUserPasscodeTx(client, userId, rawBody.passcode, { requiredIfUnset: false });
     if (!pinCheck.ok) {
@@ -1269,10 +1292,9 @@ app.get("/api/users/lookup", requireAuth, async (req, res) => {
 });
 
 app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
-  const { recipientUsername, asset = "NGN", amountMinor, passcode, note = null } = req.body || {};
+  const { recipientUsername, asset = "NGN", amountMinor, coinAmount, usdPrice, passcode, note = null } = req.body || {};
   const cleanRecipient = normalizeUsername(recipientUsername);
   const cleanAsset = String(asset || "").trim().toUpperCase();
-  const amount = Number(amountMinor);
 
   if (!cleanRecipient) {
     return res.status(400).json({ ok: false, error: "Recipient @username is required." });
@@ -1280,9 +1302,12 @@ app.post("/api/transfers/p2p", requireAuth, async (req, res) => {
   if (!ASSET_NETWORK_MAP[cleanAsset]) {
     return res.status(400).json({ ok: false, error: "Unsupported P2P asset." });
   }
-  if (!Number.isInteger(amount) || amount <= 0) {
-    return res.status(400).json({ ok: false, error: "Positive integer amountMinor is required." });
+
+  const resolved = resolveCryptoSendCents(cleanAsset, amountMinor, coinAmount, usdPrice);
+  if (!resolved.ok) {
+    return res.status(400).json({ ok: false, error: resolved.error });
   }
+  const amount = resolved.minor;
 
   const senderId = Number(req.auth.sub);
   const isNgn = cleanAsset === "NGN";
@@ -2351,10 +2376,9 @@ app.post("/api/webhooks/nowpayments", async (req, res) => {
 });
 
 app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
-  const { asset = "USDT", destinationAddress, amountMinor, gasFeeMinor = 0, passcode, totpCode, token } = req.body || {};
+  const { asset = "USDT", destinationAddress, amountMinor, coinAmount, usdPrice, gasFeeMinor = 0, passcode, totpCode, token } = req.body || {};
   const cleanAsset = String(asset || "").trim().toUpperCase();
   const cleanAddr = String(destinationAddress || "").trim();
-  const amount = Number(amountMinor);
   const cfg = ASSET_NETWORK_MAP[cleanAsset];
 
   if (!cfg || !cfg.npCurrency) {
@@ -2363,9 +2387,12 @@ app.post("/api/crypto/withdraw", requireAuth, async (req, res) => {
   if (!cleanAddr || cleanAddr.length < 16) {
     return res.status(400).json({ ok: false, error: "A valid external wallet address is required." });
   }
-  if (!Number.isInteger(amount) || amount <= 0) {
-    return res.status(400).json({ ok: false, error: "Positive integer amountMinor is required." });
+
+  const resolved = resolveCryptoSendCents(cleanAsset, amountMinor, coinAmount, usdPrice);
+  if (!resolved.ok) {
+    return res.status(400).json({ ok: false, error: resolved.error });
   }
+  const amount = resolved.minor;
 
   const userId = Number(req.auth.sub);
   const fees = calculateFees({ channel: "CRYPTO", amountMinor: amount, gasFeeMinor });
